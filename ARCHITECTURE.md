@@ -1,6 +1,6 @@
 # Architecture
 
-A self-hosted flea-market listing app that lives at `akhdan.dev/flea-market/*` as a sub-path on the existing Hugo site. Designed to be redeployable in different cities (Sendai today, Jakarta/Singapore/Sydney later) by changing environment variables, no code or schema changes.
+A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the apex `akhdan.dev`. Designed to be redeployable in different cities (Sendai today, Jakarta/Singapore/Sydney later) by changing environment variables, no code or schema changes.
 
 ## Goals and non-goals
 
@@ -30,8 +30,7 @@ A self-hosted flea-market listing app that lives at `akhdan.dev/flea-market/*` a
 | Framework          | TanStack Start (React)                                                                 | Native Cloudflare Workers target via `@tanstack/react-start/server-entry` |
 | Build              | Vite (built into TanStack Start)                                                       |                                                                           |
 | Deployment         | Cloudflare Workers                                                                     | `wrangler deploy`, `nodejs_compat` flag required                          |
-| Routing on domain  | Cloudflare Workers Route `akhdan.dev/flea-market/*`                                    | Hugo on Pages serves everything else                                      |
-| Router basepath    | `/flea-market`                                                                         | Configured in TanStack Router                                             |
+| Routing on domain  | Cloudflare Workers Custom Domain `flea-market.akhdan.dev`                              | Hugo on Pages continues to serve the apex `akhdan.dev`                    |
 | Database           | Turso (libSQL), primary region: Tokyo (`nrt`)                                          | Free tier: 5GB / 500M reads / 10M writes per month                        |
 | DB client          | `@libsql/client/web`                                                                   | Fetch-based, works in Workers                                             |
 | ORM                | Drizzle (`drizzle-orm/libsql`)                                                         |                                                                           |
@@ -45,35 +44,35 @@ A self-hosted flea-market listing app that lives at `akhdan.dev/flea-market/*` a
 ## High-level diagram
 
 ```text
-                    akhdan.dev
-                        |
-        +---------------+---------------+
-        |                               |
-    /flea-market/*               everything else
-        |                               |
-        v                               v
-  Cloudflare Worker              Cloudflare Pages
-  (TanStack Start)               (Hugo static site)
-        |
-        +-----> Turso (libSQL, Tokyo)        <- item data, translations
-        +-----> Cloudflare R2                <- photo originals
-        +-----> /cdn-cgi/image/...           <- on-the-fly resize/format
+              akhdan.dev (zone)
+                    |
+        +-----------+--------------------+
+        |                                |
+   akhdan.dev                  flea-market.akhdan.dev
+   (apex zone)                 (Custom Domain)
+        |                                |
+        v                                v
+  Cloudflare Pages                 Cloudflare Worker
+  (Hugo static site)               (TanStack Start)
+                                         |
+                                         +-----> Turso (libSQL, Tokyo)   <- item data, translations
+                                         +-----> Cloudflare R2           <- photo originals
+                                         +-----> /cdn-cgi/image/...      <- on-the-fly resize/format
 ```
 
 ## Routing strategy
 
-The trickiest part of the architecture. Two Cloudflare products on the same domain, path-split:
+Two Cloudflare products on the same zone, split by hostname (not path):
 
-1. The flea-market app is deployed as a Worker (not a Pages app)
-2. A Workers Route in the Cloudflare dashboard binds `akhdan.dev/flea-market/*` to the Worker
-3. Cloudflare matches most-specific-route-first, so non-matching paths fall through to the existing Pages project (Hugo)
-4. The TanStack Router config sets `basepath: '/flea-market'` so all generated links and asset URLs are correct
+1. The flea-market app is deployed as a Worker (not a Pages app) and attached to a Cloudflare Workers Custom Domain on the subdomain `flea-market.akhdan.dev`. The Worker is the origin for the entire subdomain — every path lands on the Worker.
+2. Hugo on Pages remains the origin for `akhdan.dev` and any other apex paths. The two are independent; no path-precedence arbitration is needed.
+3. `wrangler deploy` auto-provisions the subdomain's DNS record and TLS certificate. No DNS clicking in the dashboard.
+
+Why subdomain instead of sub-path: TanStack Start + Cloudflare Workers Static Assets does not support a basepath-mounted deployment cleanly. Cloudflare's static-asset layer requires the disk layout to mirror the URL prefix, but Vite's `base` only rewrites HTML URLs without moving files. The framework's own examples deploy at a domain root for this reason. A subdomain Custom Domain sidesteps the entanglement entirely.
 
 Caveats:
 
-- Hardcoded `href` strings will not pick up the basepath. Always use `<Link>` from TanStack Router
-- Static assets served by the Worker need to be emitted under `/flea-market/_build/...` - Vite handles this when `base` is set in the Vite config to match
-- The Workers Route precedence matters; verify with a deploy that Hugo paths still load
+- Always use `<Link>` from TanStack Router for internal navigation rather than hardcoded `href` strings. Reason is no longer "basepath rewriting" but client-side routing benefits (preload-on-intent, scroll restoration, no full reload).
 
 ## Data model
 
@@ -146,7 +145,7 @@ The two-table design (items + item_translations) decouples language from item id
 
 **Language state mechanism**:
 
-A single cookie `lang` (values `en` or `id`), `Path=/flea-market`, 1-year expiry. The server resolves the active language on every request in this order:
+A single cookie `lang` (values `en` or `id`), `Path=/`, 1-year expiry. The server resolves the active language on every request in this order:
 
 1. `lang` cookie if present and valid
 2. `Accept-Language` header parsed for `en` / `id` (any other value falls through)
@@ -156,7 +155,7 @@ The resolved language is passed to loaders and components via the route context 
 
 **Toggle endpoint**:
 
-`GET /flea-market/lang/:lang` validates the `:lang` param against `{en, id}`, sets the cookie with the attributes above, then 302-redirects to `Referer` (verified to be on the `akhdan.dev` origin; falls back to `/flea-market/` otherwise). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable.
+`GET /lang/:lang` validates the `:lang` param against `{en, id}`, sets the cookie with the attributes above, then 302-redirects to `Referer` (verified to be on the `flea-market.akhdan.dev` origin; falls back to `/` otherwise). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable.
 
 **Translation lookup**:
 
@@ -176,7 +175,7 @@ A link sent to a contact does not force their browser into your language; their 
 ## Image pipeline
 
 1. Admin drags photos into react-dropzone in the create/edit form
-2. Each file is POSTed to `/flea-market/admin/api/upload?slug={slug}` as a binary body
+2. Each file is POSTed to `/admin/api/upload?slug={slug}` as a binary body
 3. Worker checks the admin cookie, generates key `items/{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`jpg` / `png` / `webp` / `heic`; other types rejected with 415), then calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
 4. Worker returns the key; the form appends it to the item's `photos` array
 5. On save, the items row stores `photos: [{key, alt?}, ...]`
@@ -207,24 +206,24 @@ Single-admin, token-in-cookie design.
 
 **Login flow**:
 
-1. `GET /flea-market/admin/login` shows a single password input
-2. `POST /flea-market/admin/login` compares submitted password to `env.ADMIN_TOKEN` using SHA-256 + `timingSafeEqual` (constant-time; `timingSafeEqual` is available under `nodejs_compat`)
+1. `GET /admin/login` shows a single password input
+2. `POST /admin/login` compares submitted password to `env.ADMIN_TOKEN` using SHA-256 + `timingSafeEqual` (constant-time; `timingSafeEqual` is available under `nodejs_compat`)
 3. On match, sets the `admin_session` cookie:
    - **Value**: the literal string `admin` HMAC-SHA256-signed with `env.COOKIE_SECRET` (format: `admin.<hex-mac>`)
-   - **Attributes**: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/flea-market`, `Max-Age=2592000` (30 days)
+   - **Attributes**: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days)
 4. On mismatch, returns a 401 with a generic error
 
 The payload is intentionally a constant. A single-admin app has nothing per-session to encode; the signature is the only thing standing between a forged value and access. If you ever add a second person, evolve the payload to `{iat, v}` with a version field that lets you mass-invalidate without rotating the secret.
 
 **Authorization**:
 
-- All routes under `/flea-market/admin/*` (except `/login`) require the cookie to validate
+- All routes under `/admin/*` (except `/login`) require the cookie to validate
 - Validation happens in a parent route loader so it isn't repeated across handlers
-- Failed validation redirects to `/flea-market/admin/login`
+- Failed validation redirects to `/admin/login`
 
 **Logout**:
 
-- `POST /flea-market/admin/logout` clears the cookie
+- `POST /admin/logout` clears the cookie
 
 **Revocation**:
 
@@ -244,7 +243,7 @@ If the admin password leaks, rotate both.
 
 Client-side, no DB involvement.
 
-**State**: a Zustand store holds `Set<itemSlug>`, persisted to `localStorage` under key `flea-market:cart`. Initialized from localStorage on app mount.
+**State**: a Zustand store holds `Set<itemSlug>`, persisted to `localStorage` under key `flea-market:cart` (a storage namespace, unrelated to URL paths). Initialized from localStorage on app mount.
 
 **UI**:
 
@@ -273,7 +272,7 @@ Client-side, no DB involvement.
   "compatibility_date": "2026-05-13", // pinned; bump deliberately when adopting new runtime behavior
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "routes": [{ "pattern": "akhdan.dev/flea-market/*", "zone_name": "akhdan.dev" }],
+  "routes": [{ "pattern": "flea-market.akhdan.dev", "custom_domain": true }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }],
   "vars": {
     "DEFAULT_CURRENCY": "JPY",
@@ -301,7 +300,8 @@ Same variables as above with development values; Wrangler loads automatically.
 ## Deployment
 
 - `pnpm run deploy` runs `vite build && wrangler deploy`
-- Workers Route is declared in `wrangler.jsonc` and provisioned on deploy
+- The Workers Custom Domain (`flea-market.akhdan.dev`) is declared in `wrangler.jsonc` and provisioned on deploy — DNS record and TLS certificate are created automatically the first time
+- **`wrangler deploy` is additive for triggers, not reconciliatory.** Routes removed from `wrangler.jsonc` are **not** automatically cleaned off the zone — `wrangler triggers deploy` does not remove orphans either. Stale route bindings keep intercepting traffic. To clean up, delete via the Cloudflare dashboard (Workers -> Triggers -> Routes) or the REST API: `DELETE /zones/{zone_id}/workers/routes/{route_id}`. List existing routes with `GET /zones/{zone_id}/workers/routes`. The wrangler OAuth token at `~/Library/Preferences/.wrangler/config/default.toml` has the `workers_routes:write` scope and works as a `Bearer` token
 - R2 bucket is created once via `wrangler r2 bucket create flea-market`
 - Public R2 domain is enabled once via dashboard (one-time, doesn't move)
 - Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time)

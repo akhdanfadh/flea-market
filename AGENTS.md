@@ -2,8 +2,9 @@
 
 ## 1) Mission
 
-A self-hosted flea-market listing app served at `akhdan.dev/flea-market/*` as a sub-path
-of the existing Hugo site. Single-admin CRUD, public browse + cart-to-contact flow,
+A self-hosted flea-market listing app served at `flea-market.akhdan.dev`, a
+dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the
+apex `akhdan.dev`. Single-admin CRUD, public browse + cart-to-contact flow,
 bilingual content (English required, Indonesian optional).
 
 Core product model:
@@ -71,8 +72,10 @@ fetches current docs and avoids stale training data.
 
 ### Code
 
-1. Use `<Link>` from TanStack Router for all internal navigation - hardcoded `href`
-   strings will not pick up the `/flea-market` basepath.
+1. Use `<Link>` from TanStack Router for all internal navigation. The app is at
+   the root of its own subdomain (no basepath), so hardcoded `href` strings
+   would not break URLs - but `<Link>` is still required for client-side
+   routing benefits: preload-on-intent, scroll restoration, no full reload.
 2. Money is stored in minor units, always. See `ARCHITECTURE.md` #"Money handling".
    Never multiply or divide a stored amount outside `src/lib/money.ts`.
 3. Images render through `/cdn-cgi/image/...` URLs via the `optimizedImageUrl` helper;

@@ -17,7 +17,7 @@ Before starting step 1:
 
 ## Step 1: Scaffold TanStack Start, deploy to a Worker
 
-**Status**: Done (2026-05-13) - live at <https://flea-market.akhdanfadh.workers.dev/flea-market/>
+**Status**: Done (2026-05-13). Originally shipped with `basepath: '/flea-market'` and Vite `base: '/flea-market/'`. Both were removed in Step 2 when migrating to a subdomain Custom Domain - see Step 2 for context.
 
 **Goal**: A blank TanStack Start app deployed to `*.workers.dev`, basepath configured, no domain routing yet.
 
@@ -82,33 +82,56 @@ Pitfalls:
 - Public-folder assets (favicon, og-image) are not always auto-prefixed by Vite's `base`. If a favicon 404s, prefix the reference by hand
 - The `@cloudflare/vite-plugin` must be listed before the Start plugin in `vite.config.ts` - the scaffold does this correctly; don't reorder
 
-## Step 2: Add the Workers Route on `akhdan.dev`
+## Step 2: Attach Workers Custom Domain `flea-market.akhdan.dev`
 
-**Goal**: `akhdan.dev/flea-market/*` routes to the Worker; Hugo still serves all other paths.
+**Goal**: The Worker serves the entire `flea-market.akhdan.dev` subdomain; Hugo on Pages continues to serve `akhdan.dev`.
+
+Why a subdomain (not a sub-path on the apex): TanStack Start + Cloudflare Workers Static Assets does not support a basepath-mounted deployment cleanly. Cloudflare's static-asset layer requires the on-disk asset layout to literally mirror the URL prefix; Vite's `base` only rewrites HTML URLs, not file paths. The framework's own `start-basic-cloudflare` example sidesteps this by deploying at a domain root. A Custom Domain on a subdomain is the framework-blessed pattern.
 
 Tasks:
 
-- Add the route declaration to `wrangler.jsonc`:
+- Replace the route declaration in `wrangler.jsonc` with a Custom Domain entry:
 
   ```jsonc
   "routes": [
-    { "pattern": "akhdan.dev/flea-market/*", "zone_name": "akhdan.dev" }
+    { "pattern": "flea-market.akhdan.dev", "custom_domain": true }
   ]
   ```
 
+  No `zone_name` needed - Custom Domain config is minimal. `wrangler deploy` auto-creates the DNS record and provisions a TLS certificate the first time.
+
+- Remove `base: '/flea-market/'` from `vite.config.ts` (let Vite default to `/`)
+- Remove `basepath: '/flea-market'` from `src/router.tsx`
 - Redeploy with `pnpm run deploy`
 
 Verify:
 
-- `https://akhdan.dev/flea-market/` shows the TanStack Start home page
+- `https://flea-market.akhdan.dev/` shows the TanStack Start home page with CSS visibly applied (e.g. `p-8`, `text-4xl` Tailwind classes render)
+- Asset URLs the page references (CSS and JS bundles) return 200, not 404 - this is the verification step missed in earlier attempts
+- `https://flea-market.akhdan.dev/page-two` SSRs correctly
+- `<Link>` navigation in the browser works without a full reload
 - `https://akhdan.dev/` still shows the Hugo site
-- `https://akhdan.dev/posts/some-post/` (or whatever Hugo paths exist) still works
-- Asset URLs returned by the Worker are prefixed `/flea-market/`
+- `https://akhdan.dev/flea-market/` now 404s from Pages (the old sub-path route is gone). An optional Hugo-side redirect would fix this; see "Optional follow-up" below
+
+Verification mechanism: run `pnpm wrangler tail flea-market` in a second terminal. A request entry confirms the Worker served the response. `cf-ray` and `cf-cache-status` only confirm Cloudflare-proxying, not which product. `CF-Worker` is a request header Cloudflare adds on Worker-to-origin subrequests, not a response header to visitors.
 
 Pitfalls:
 
-- If a Pages catch-all is more specific than the Worker route, Pages wins. Verify by checking response headers (`cf-worker` will be present on Worker responses)
-- DNS propagation should be instant for a route on an existing zone, but allow a minute
+- **TLS provisioning lag.** Cloudflare's Advanced Certificate is typically ready within a minute of deploy. If the first HTTPS request returns a TLS error, wait and retry - don't redeploy in a tight loop
+- **`*.workers.dev` stays disabled** when a Custom Domain route is set without `"workers_dev": true`. Add `"workers_dev": true` to `wrangler.jsonc` if you want the workers.dev URL alive as a debug bypass
+- **Don't put a `basepath` on the router or `base` on Vite**. The whole point of moving to a subdomain is that the app is at the root of its hostname; basepath/base settings will mis-prefix asset URLs and break things again
+- **The old sub-path URL orphans.** Anyone who shared `akhdan.dev/flea-market/...` will land on Hugo's 404 after this migration. Acceptable for an MVP with no traffic yet. Add a Hugo-side redirect in the apex repo when convenient (see Optional follow-up)
+- **The previous Worker Route binding from the failed sub-path attempt does not auto-clean.** `wrangler deploy` is additive for triggers; the old `akhdan.dev/flea-market*` route stayed bound to the Worker after this step's deploy and kept intercepting requests (returning a Worker 404 instead of Hugo's). Delete it explicitly via the Cloudflare REST API (see ARCHITECTURE.md #Deployment for the exact call). After deletion, the apex sub-path correctly falls through to Pages
+
+Optional follow-up (cross-repo, not in this step's commit):
+
+In the Hugo apex site's `_redirects` (Cloudflare Pages config), add:
+
+```
+/flea-market/* https://flea-market.akhdan.dev/:splat 301
+```
+
+This gracefully redirects anyone who has the old URL bookmarked.
 
 ## Step 3: Tailwind + shadcn/ui
 
@@ -186,7 +209,7 @@ Tasks:
 - Configure a public R2 custom domain (e.g. `media.akhdan.dev`) via the dashboard. This is a one-time setup, not codeable via wrangler
 - Add `R2_PUBLIC_BASE` to `vars` in `wrangler.jsonc`, set to `https://media.akhdan.dev`
 - Enable Image Transformations for the zone in the Cloudflare dashboard (one-time, also not codeable)
-- Build upload endpoint at `/flea-market/admin/api/upload`:
+- Build upload endpoint at `/admin/api/upload`:
   - Accepts POST with binary body and `?slug=...` query param
   - Auth check via cookie. Step 7 will wire this up; for now stub it to always succeed and leave a TODO with a concrete trigger (e.g. `// TODO: replace with real cookie check once admin auth lands`)
   - Generates key `items/{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`image/jpeg` -> `jpg`, `image/png` -> `png`, `image/webp` -> `webp`, `image/heic` -> `heic`). Reject other content types with 415.
@@ -203,13 +226,13 @@ Verify:
 
   ```sh
   curl -X POST --data-binary @photo.jpg -H "Content-Type: image/jpeg" \
-    http://localhost:5173/flea-market/admin/api/upload?slug=test-item
+    http://localhost:5173/admin/api/upload?slug=test-item
   ```
 
   returns a `key`
 
 - The key resolves at `https://media.akhdan.dev/{key}` (raw original)
-- The transformed URL `https://akhdan.dev/cdn-cgi/image/width=400,quality=75,format=auto/https://media.akhdan.dev/{key}` returns a smaller image
+- The transformed URL `https://flea-market.akhdan.dev/cdn-cgi/image/width=400,quality=75,format=auto/https://media.akhdan.dev/{key}` returns a smaller image
 - Network tab shows the transformed image is <100KB for a width=400 variant
 
 Pitfalls:
@@ -225,19 +248,20 @@ Pitfalls:
 
 Tasks:
 
+- Decide the canonical URL form by setting `trailingSlash` on the TanStack Router config in `src/router.tsx`. TanStack Router's default is `'never'` (strip trailing slash on sub-routes), but Cloudflare Workers Static Assets defaults to `auto-trailing-slash` for the root, so `flea-market.akhdan.dev` will always 307 to `flea-market.akhdan.dev/`. Recommended: `trailingSlash: 'always'` for consistency between root and sub-routes (`/some-item/` instead of `/some-item`), matching Hugo's convention on the apex. Verify by curling `/some-item` (no slash) and confirming it 307s to `/some-item/`
 - Build `formatPrice(amount, currency)` and `MINOR_UNITS` constant in `src/lib/money.ts` per ARCHITECTURE.md (locale hardcoded to `'en'`)
 - Implement language resolution helper `src/lib/lang.ts`:
   - `getLanguage(request)`: cookie `lang` -> `Accept-Language` parsing for `en`/`id` -> `env.DEFAULT_LANGUAGE`
-  - Toggle endpoint at `/flea-market/lang/$lang` that validates against `{en, id}`, sets the `lang` cookie (`Path=/flea-market`, 1-year `Max-Age`), and 302-redirects to `Referer` if same-origin else `/flea-market/`
-- List page at `/flea-market/`:
+  - Toggle endpoint at `/lang/$lang` that validates against `{en, id}`, sets the `lang` cookie (`Path=/`, 1-year `Max-Age`), and 302-redirects to `Referer` if same-origin else `/`
+- List page at `/`:
   - `createServerFn` loader resolves language, then fetches all items with the matching translation row (falling back to `en` if the requested language is absent)
   - Renders a grid of Cards: thumbnail (via `optimizedImageUrl(photos[0].key, { width: 400 })`), title, price, status badge
   - Status badge: `available` (green), `reserved` (yellow), `sold` (gray, item dimmed but still visible)
   - Filter controls: status (All / Available / Reserved / Sold) and price (All / Free / Paid)
   - Filter state lives in URL search params via TanStack Router; define a `zod` schema for type-safe parsing. Pin `zod >= 3.24` so it works with `validateSearch` directly via Standard Schema - no `@tanstack/zod-adapter` package needed
   - Client-side search box: substring match on title/description (no server work)
-  - Language toggle button (anchor to `/flea-market/lang/id` or `/flea-market/lang/en` depending on current state)
-- Detail page at `/flea-market/$slug`:
+  - Language toggle button (anchor to `/lang/id` or `/lang/en` depending on current state)
+- Detail page at `/$slug`:
   - `createServerFn` loader fetches the item + translation by slug, language-resolved
   - Renders the photo carousel (use `optimizedImageUrl(key, { width: 1200 })`), title, price, status, description
   - 404 handling for unknown slugs
@@ -255,7 +279,7 @@ Verify:
 Pitfalls:
 
 - TanStack Router's search params need to be typed; define a schema using `zod` for type-safe filter params
-- Don't forget to verify `Referer` is on `akhdan.dev` in the language-toggle redirect - an open redirect here is small but free to avoid
+- Don't forget to verify `Referer` is on `flea-market.akhdan.dev` in the language-toggle redirect - an open redirect here is small but free to avoid
 
 ## Step 7: Admin auth
 
@@ -271,17 +295,17 @@ Tasks:
   - `signCookie(value: string, secret: string)`: HMAC-SHA256, returns `<value>.<hex-mac>`
   - `verifyCookie(signedValue: string, secret: string)`: split on `.`, recompute MAC, constant-time compare, return value or null
 - Build the login flow:
-  - Route at `/flea-market/admin/login` shows a single password input form
-  - POST handler verifies token, sets `admin_session` cookie containing the signed literal `admin` with attributes per ARCHITECTURE.md #Admin auth: `HttpOnly`, `Secure`, `SameSite=Lax`, **`Path=/flea-market`**, `Max-Age=2592000` (30 days). Redirects to `/flea-market/admin/`.
+  - Route at `/admin/login` shows a single password input form
+  - POST handler verifies token, sets `admin_session` cookie containing the signed literal `admin` with attributes per ARCHITECTURE.md #Admin auth: `HttpOnly`, `Secure`, `SameSite=Lax`, **`Path=/`**, `Max-Age=2592000` (30 days). Redirects to `/admin/`.
   - Failed login returns 401 with generic error
-- Build a parent route loader at `/flea-market/admin/` that runs before all admin routes (except login):
+- Build a parent route loader at `/admin/` that runs before all admin routes (except login):
   - Reads the cookie, verifies signature, redirects to `/login` if invalid
 - Replace the `// TODO: auth` stub in the upload endpoint (step 5) with a real cookie check
-- Add a logout button somewhere in the admin UI that POSTs to `/flea-market/admin/logout` and clears the cookie (`Max-Age=0`, same `Path`)
+- Add a logout button somewhere in the admin UI that POSTs to `/admin/logout` and clears the cookie (`Max-Age=0`, same `Path`)
 
 Verify:
 
-- Visiting `/flea-market/admin/` while logged out redirects to login
+- Visiting `/admin/` while logged out redirects to login
 - Submitting the correct password sets a cookie and reaches the admin index
 - Submitting a wrong password shows the error
 - Logging out clears the cookie and re-redirects on next admin visit
@@ -299,12 +323,12 @@ Pitfalls:
 
 Tasks:
 
-- Admin index at `/flea-market/admin/`:
+- Admin index at `/admin/`:
   - Lists all items in a table with title, price, status, last updated, actions (edit, mark sold, delete)
-- Create page at `/flea-market/admin/new`:
+- Create page at `/admin/new`:
   - Form fields: slug (auto-generated from English title + today's date, with override), price amount, currency (dropdown defaulting to `DEFAULT_CURRENCY`), status (defaults to `available`), photos (react-dropzone), English title/description (required), Indonesian title/description (optional, hidden behind a "Add Indonesian" toggle)
   - On submit: transaction inserts items row + 1-2 translations rows, returns to admin index with a success toast
-- Edit page at `/flea-market/admin/$slug/edit`:
+- Edit page at `/admin/$slug/edit`:
   - Same form pre-filled
   - Save updates the row in place
 - Photo management:
@@ -399,7 +423,7 @@ Likely v2 additions and where to slot them:
 
 ## Notes for working with Claude Code
 
-- Each step lands as one or more commits; default is one commit per step, split only when there's a clear reviewability benefit (e.g. isolating raw generator/scaffold output from customizations). See `CLAUDE.md` §4 Workflow.
+- Each step lands as one or more commits; default is one commit per step, split only when there's a clear reviewability benefit (e.g. isolating raw generator/scaffold output from customizations). See `CLAUDE.md` #4 Workflow.
 - Run `pnpm run deploy` after every step and verify in production before moving on
 - Keep `ARCHITECTURE.md` updated if any decision changes during implementation
 - If a step turns into a multi-hour rabbit hole, stop and ask before continuing
