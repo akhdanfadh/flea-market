@@ -19,14 +19,15 @@ await db.delete(items);
 
 const today = "20260513";
 
+const fridgeSlug = `${today}-mini-fridge-sharp-sjd14f`;
 const [fridge] = await db
   .insert(items)
   .values({
-    slug: `${today}-mini-fridge-sharp-sjd14f`,
+    slug: fridgeSlug,
     priceAmount: 8000,
     priceCurrency: "JPY",
     status: "available",
-    photos: [],
+    photos: [{ key: `${fridgeSlug}/seed-1.jpg`, alt: "Closed fridge front" }],
   })
   .returning();
 
@@ -41,14 +42,15 @@ const [bicycle] = await db
   })
   .returning();
 
+const booksSlug = `${today}-english-paperback-bundle`;
 const [books] = await db
   .insert(items)
   .values({
-    slug: `${today}-english-paperback-bundle`,
+    slug: booksSlug,
     priceAmount: null,
     priceCurrency: null,
     status: "available",
-    photos: [],
+    photos: [{ key: `${booksSlug}/seed-1.jpg`, alt: "Stacked paperbacks" }],
   })
   .returning();
 

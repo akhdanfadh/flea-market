@@ -176,21 +176,23 @@ A link sent to a contact does not force their browser into your language; their 
 
 1. Admin drags photos into react-dropzone in the create/edit form
 2. Each file is POSTed to `/admin/api/upload?slug={slug}` as a binary body
-3. Worker checks the admin cookie, generates key `items/{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`jpg` / `png` / `webp` / `heic`; other types rejected with 415), then calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
+3. Worker checks the admin cookie, generates key `{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`jpg` / `png` / `webp` / `heic`; other types rejected with 415), then calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
 4. Worker returns the key; the form appends it to the item's `photos` array
 5. On save, the items row stores `photos: [{key, alt?}, ...]`
 
 Serving:
 
-- A public R2 custom domain (e.g. `media.akhdan.dev`) exposes raw originals at predictable URLs
-- The app renders images with Cloudflare's image transformation URL prefix:
+- The Worker proxies R2 originals at `/images/<key>` via the `BUCKET` binding (see `src/routes/images/$.ts`). Cache headers (`Cache-Control: public, max-age=31536000, immutable` + `ETag`) let Cloudflare's edge cache transformed variants forever after first generation, so the Worker is invoked only on cache miss
+- The app renders images with Cloudflare's image transformation URL prefix, using a relative path source (resolves against the current zone — no R2 custom domain or env var needed):
 
   ```text
-  /cdn-cgi/image/width={w},quality=75,format=auto/https://media.akhdan.dev/{key}
+  /cdn-cgi/image/width={w},quality=75,format=auto/images/{key}
   ```
 
 - List page uses width=400, detail page uses width=1200, open-graph cards use width=1200&height=630&fit=cover
 - All variants are cached at the edge after first generation
+
+Why proxy through the Worker instead of a public R2 custom domain: an R2 custom domain binds a whole hostname to one bucket, so a generic name like `media.akhdan.dev` would be locked to flea-market only. Proxying via the Worker keeps `flea-market.akhdan.dev` as the single hostname for the app and leaves other subdomains free for unrelated projects. At our scale (~90 lifetime unique transformations, sub-500 daily requests) the Worker request cost is noise.
 
 Counts: ~30 items × 3 variants = 90 unique transformations. The 5,000/month free tier is never close to threatened.
 
@@ -279,7 +281,6 @@ Client-side, no DB involvement.
     "SUPPORTED_CURRENCIES": "JPY,IDR,SGD,AUD",
     "DEFAULT_LANGUAGE": "en",
     "FB_HANDLE": "your-facebook-handle",
-    "R2_PUBLIC_BASE": "https://media.akhdan.dev",
   },
 }
 ```
@@ -302,9 +303,8 @@ Same variables as above with development values; Wrangler loads automatically.
 - `pnpm run deploy` runs `vite build && wrangler deploy`
 - The Workers Custom Domain (`flea-market.akhdan.dev`) is declared in `wrangler.jsonc` and provisioned on deploy — DNS record and TLS certificate are created automatically the first time
 - **`wrangler deploy` is additive for triggers, not reconciliatory.** Routes removed from `wrangler.jsonc` are **not** automatically cleaned off the zone — `wrangler triggers deploy` does not remove orphans either. Stale route bindings keep intercepting traffic. To clean up, delete via the Cloudflare dashboard (Workers -> Triggers -> Routes) or the REST API: `DELETE /zones/{zone_id}/workers/routes/{route_id}`. List existing routes with `GET /zones/{zone_id}/workers/routes`. The wrangler OAuth token at `~/Library/Preferences/.wrangler/config/default.toml` has the `workers_routes:write` scope and works as a `Bearer` token
-- R2 bucket is created once via `wrangler r2 bucket create flea-market`
-- Public R2 domain is enabled once via dashboard (one-time, doesn't move)
-- Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time)
+- R2 bucket is created once via `wrangler r2 bucket create flea-market`. No public custom domain is provisioned; the Worker serves originals at `/images/<key>` via the `BUCKET` binding (see Image pipeline)
+- Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time). Because the source URL is on the same zone as the transformer, no entry in Images > Transformations > Sources is required
 - Turso DB is created via `turso db create flea-market --group <group>`. Groups carry the location; on a fresh Turso account a `default` group typically already exists in the region tied to the signup, and `turso group list` shows existing groups. Use `turso group create <name> --location nrt` to provision Tokyo if no Tokyo group exists yet
 - Drizzle migrations are run from the local machine against the Turso URL
 

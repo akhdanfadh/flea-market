@@ -160,6 +160,8 @@ Pitfalls:
 
 ## Step 4: Turso, Drizzle, schema, migrations
 
+**Status**: Done (2026-05-13). Turso DB created in the `default` group (Tokyo / `aws-ap-northeast-1`); Drizzle schema applied via `drizzle-kit push`; three seed items + five translations loaded and verified via `pnpm db:check`. Deploy was deliberately skipped because nothing runtime-consumes the DB layer yet (rolled into Step 5).
+
 **Goal**: Turso database created in Tokyo region, Drizzle ORM configured, schema defined, schema applied, 3 seed items inserted.
 
 Tasks:
@@ -199,9 +201,13 @@ Pitfalls:
 
 ## Step 5: R2, photo upload, image transforms
 
-**Goal**: R2 bucket bound, upload endpoint working (auth stubbed for now), photos serve through Cloudflare Image Transformations.
+**Status**: Done (2026-05-14). R2 bucket bound as `env.BUCKET`; `/images/$` splat route streams originals with `Cache-Control: public, max-age=31536000, immutable` + ETag + `X-Content-Type-Options: nosniff`; `/admin/api/upload` POST gated by real `Authorization: Bearer` auth against `env.ADMIN_TOKEN` (SHA-256 + `timingSafeEqual`, via the new `src/lib/auth.ts`). Two placeholder JPEGs uploaded to R2 and attached to the fridge and paperback seed items; bicycle stays photoless. Image Transformations enabled on the zone (Sources = "This zone only"). Verified in prod: original at `/images/<key>` returns 200 with the right headers, transformed `/cdn-cgi/image/width=200,...` returns 642 bytes (vs 1803 source), second request shows `cf-cache-status: HIT` (Worker bypassed). Auth paths return 401, malformed URL encoding returns 400, unknown keys return 404.
 
-This step now precedes the public list page so step 6 can render real photos against real R2 keys, rather than placeholders.
+**Goal**: R2 bucket bound, upload endpoint working (auth stubbed for now), photos served by the Worker at `/images/<key>`, transformed variants delivered via Cloudflare Image Transformations.
+
+This step precedes the public list page so step 6 can render real photos against real R2 keys, rather than placeholders.
+
+**Why Worker proxy instead of an R2 public custom domain.** An R2 custom domain binds an entire hostname to one bucket — using a generic name like `media.akhdan.dev` would lock that subdomain to flea-market only. Proxying R2 through the Worker at `/images/<key>` keeps all app traffic under `flea-market.akhdan.dev` and leaves other subdomains free for unrelated projects. At our scale the Worker request cost is negligible: Image Transformations cache transformed variants forever after first generation, so the Worker is invoked once per unique cache miss (~90 lifetime hits). The R2 binding is an in-process RPC, not an HTTP call.
 
 Tasks:
 
@@ -212,41 +218,56 @@ Tasks:
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }]
   ```
 
-- Re-run `pnpm cf-typegen` so `env.BUCKET` is typed
-- Configure a public R2 custom domain (e.g. `media.akhdan.dev`) via the dashboard. This is a one-time setup, not codeable via wrangler
-- Add `R2_PUBLIC_BASE` to `vars` in `wrangler.jsonc`, set to `https://media.akhdan.dev`
-- Enable Image Transformations for the zone in the Cloudflare dashboard (one-time, also not codeable)
-- Build upload endpoint at `/admin/api/upload`:
-  - Accepts POST with binary body and `?slug=...` query param
-  - Auth check via cookie. Step 7 will wire this up; for now stub it to always succeed and leave a TODO with a concrete trigger (e.g. `// TODO: replace with real cookie check once admin auth lands`)
-  - Generates key `items/{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`image/jpeg` -> `jpg`, `image/png` -> `png`, `image/webp` -> `webp`, `image/heic` -> `heic`). Reject other content types with 415.
-  - Calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType: request.headers.get('content-type') } })`
+- Generate `ADMIN_TOKEN` (`openssl rand -hex 32`), `wrangler secret put ADMIN_TOKEN`, add to `.dev.vars`. The token is what Step 7's login form will compare against; introducing it now lets Step 5 ship with real Bearer-token auth on the upload endpoint instead of a throwaway stub, closing the deploy-window gap between Step 5 and Step 7
+- Re-run `pnpm cf-typegen` so `env.BUCKET: R2Bucket` and `env.ADMIN_TOKEN: string` are typed
+- Enable Image Transformations for the zone in the Cloudflare dashboard (one-time, not codeable). No entry in Images > Transformations > Sources is required because the transformer and source URL share the same zone
+- Build image-serving splat route at `src/routes/images/$.ts`:
+  - `createFileRoute("/images/$")({ server: { handlers: { GET: ... } } })` — the splat captures the full R2 key
+  - Wrap `decodeURIComponent` in try/catch and return 400 on malformed input (a lone `%` in the path otherwise throws `URIError` and 500s)
+  - `env.BUCKET.get(key)` -> 404 if null
+  - Response: stream body, `obj.writeHttpMetadata(headers)` for Content-Type, `Cache-Control: public, max-age=31536000, immutable`, `ETag: obj.httpEtag` so edge caches aggressively, and `X-Content-Type-Options: nosniff` so browsers don't reinterpret bytes (defense-in-depth against polyglot files)
+- Build the auth helper at `src/lib/auth.ts`:
+  - `verifyToken(submitted, expected)`: SHA-256 both inputs, compare with `timingSafeEqual` (`node:crypto`, available under `nodejs_compat`). Hashing first means we don't leak length information through the constant-time compare
+  - `verifyBearer(request, expected)`: extracts the `Authorization: Bearer <token>` header and delegates to `verifyToken`
+  - Step 7 extends this file with `signCookie` and `verifyCookie` for the session cookie
+- Build upload endpoint at `src/routes/admin/api/upload.ts`:
+  - `createFileRoute("/admin/api/upload")({ server: { handlers: { POST: ... } } })`
+  - Auth: `verifyBearer(request, env.ADMIN_TOKEN)` -> 401 on failure. Real Bearer-token auth, not a stub. Step 7 keeps this check and adds cookie-session auth in parallel for the browser admin flow
+  - Accepts POST with binary body and `?slug=...` query param. Validate `slug` against `^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$` — alphanumeric start/end, hyphens allowed in the middle, 1-100 chars. Prevents path traversal and ugly keys
+  - Reject zero-byte bodies (`content-length === "0"`) with 400 to avoid orphan empty R2 objects
+  - Generates key `{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`image/jpeg` -> `jpg`, `image/png` -> `png`, `image/webp` -> `webp`, `image/heic` -> `heic`). Reject other content types with 415
+  - Calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
   - Returns `{ key }` as JSON
-- Build `optimizedImageUrl(key, { width })` in `src/lib/images.ts` that emits `/cdn-cgi/image/width={w},quality=75,format=auto/{R2_PUBLIC_BASE}/{key}`
+- Build `optimizedImageUrl(key, { width })` in `src/lib/images.ts` that emits `/cdn-cgi/image/width={w},quality=75,format=auto/images/{key}` — relative path source resolves against the current zone, no host needed
 - Seed one or two real photos for the existing seed items so step 6 can render them:
-  - From the local machine: `wrangler r2 object put flea-market/items/<seed-slug>/seed-1.jpg --file=./fixtures/photo.jpg`
-  - Update the seed script to populate `photos: [{key: "items/<seed-slug>/seed-1.jpg"}]` and re-run `pnpm db:seed`
+  - Commit two small placeholder JPEGs to `fixtures/seed-mini-fridge.jpg` and `fixtures/seed-paperbacks.jpg`
+  - From the local machine, upload them: `pnpm wrangler r2 object put flea-market/<fridge-slug>/seed-1.jpg --file=./fixtures/seed-mini-fridge.jpg --content-type=image/jpeg --remote`, same for the paperback bundle. The `--remote` flag is required — current wrangler defaults R2 object operations to local Miniflare emulation, not the production bucket
+  - Seed script attaches `photos: [{key: "<slug>/seed-1.jpg", alt: "..."}]` for those two items; the bicycle stays photoless to exercise the "no photo" rendering path in Step 6
+  - Re-run `pnpm db:seed -- --force`
 
 Verify:
 
 - Upload via local dev server (`pnpm dev`, which gives you R2 bindings via Miniflare):
 
   ```sh
-  curl -X POST --data-binary @photo.jpg -H "Content-Type: image/jpeg" \
-    http://localhost:5173/admin/api/upload?slug=test-item
+  curl -X POST --data-binary @photo.jpg \
+    -H "Content-Type: image/jpeg" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "http://localhost:3000/admin/api/upload?slug=test-item"
   ```
 
-  returns a `key`
+  returns a `{ key }` JSON response. (Source `ADMIN_TOKEN` from `.dev.vars` for the local test.)
 
-- The key resolves at `https://media.akhdan.dev/{key}` (raw original)
-- The transformed URL `https://flea-market.akhdan.dev/cdn-cgi/image/width=400,quality=75,format=auto/https://media.akhdan.dev/{key}` returns a smaller image
+- The key resolves at `https://flea-market.akhdan.dev/images/{key}` (raw original streamed by the Worker)
+- The transformed URL `https://flea-market.akhdan.dev/cdn-cgi/image/width=400,quality=75,format=auto/images/{key}` returns a smaller image
 - Network tab shows the transformed image is <100KB for a width=400 variant
+- A second request for the same transformed URL hits the edge cache; the Worker tail (`pnpm wrangler tail`) shows no invocation
 
 Pitfalls:
 
 - Image Transformations must be explicitly enabled per zone in the dashboard before `/cdn-cgi/image/` works; otherwise it 404s
-- R2 public custom domain requires a CNAME and certificate setup; one-time but not instant
-- Large uploads have a Worker request size limit (100MB on the free plan). Phone photos are typically 5-10MB which fits, but Image Transformations only resizes for _serving_ - the original sits in R2 at full size. If admin uploads become tedious over cellular, add browser-side downscaling (canvas to ~2400px max) in step 8; not required now
+- Wrong `Cache-Control` on the `/images/$` response makes every transformation cache miss re-hit the Worker. Use `public, max-age=31536000, immutable` — Cloudflare's edge respects these the way browsers do
+- Large uploads have a Worker request size limit (100MB on the free plan). Phone photos are typically 5-10MB which fits, but Image Transformations only resizes for _serving_ — the original sits in R2 at full size. If admin uploads become tedious over cellular, add browser-side downscaling (canvas to ~2400px max) in step 8; not required now
 - Hardcoding `.jpg` for every upload silently mislabels PNG/HEIC; always derive the extension from `Content-Type`
 
 ## Step 6: Public list page and detail page
@@ -294,20 +315,18 @@ Pitfalls:
 
 Tasks:
 
-- Generate the token locally: `openssl rand -hex 32`
-- Store as Worker secret: `wrangler secret put ADMIN_TOKEN`. Also add to `.dev.vars`
-- Generate cookie signing secret: `openssl rand -hex 32`. Store as `COOKIE_SECRET`
-- Build the auth utility in `src/lib/auth.ts`:
-  - `verifyToken(submitted: string, expected: string)`: SHA-256 both, compare with `timingSafeEqual` (available under `nodejs_compat`)
+- `ADMIN_TOKEN` is already provisioned in Step 5 (used by the upload endpoint's Bearer auth). Reuse it here for the login form's password comparison. No new generation step
+- Generate cookie signing secret: `openssl rand -hex 32`. Store as `wrangler secret put COOKIE_SECRET`. Add to `.dev.vars`
+- Extend `src/lib/auth.ts` (created in Step 5 with `verifyToken` and `verifyBearer`):
   - `signCookie(value: string, secret: string)`: HMAC-SHA256, returns `<value>.<hex-mac>`
   - `verifyCookie(signedValue: string, secret: string)`: split on `.`, recompute MAC, constant-time compare, return value or null
 - Build the login flow:
   - Route at `/admin/login` shows a single password input form
-  - POST handler verifies token, sets `admin_session` cookie containing the signed literal `admin` with attributes per ARCHITECTURE.md #Admin auth: `HttpOnly`, `Secure`, `SameSite=Lax`, **`Path=/`**, `Max-Age=2592000` (30 days). Redirects to `/admin/`.
+  - POST handler calls `verifyToken(submittedPassword, env.ADMIN_TOKEN)`, sets `admin_session` cookie containing the signed literal `admin` with attributes per ARCHITECTURE.md #Admin auth: `HttpOnly`, `Secure`, `SameSite=Lax`, **`Path=/`**, `Max-Age=2592000` (30 days). Redirects to `/admin/`.
   - Failed login returns 401 with generic error
 - Build a parent route loader at `/admin/` that runs before all admin routes (except login):
   - Reads the cookie, verifies signature, redirects to `/login` if invalid
-- Replace the `// TODO: auth` stub in the upload endpoint (step 5) with a real cookie check
+- Update the upload endpoint (`src/routes/admin/api/upload.ts`): accept either the existing Bearer-token auth (for CLI/curl) OR a valid `admin_session` cookie (for the browser-based admin form in Step 8). Both paths converge on the same `ADMIN_TOKEN`
 - Add a logout button somewhere in the admin UI that POSTs to `/admin/logout` and clears the cookie (`Max-Age=0`, same `Path`)
 
 Verify:
@@ -362,7 +381,7 @@ Pitfalls:
 
 - File upload + form submit in one POST is awkward; do photo uploads ahead of form save and pass the resulting keys with the form data
 - Don't forget to delete R2 objects when an item is deleted, or you'll accumulate orphan photos
-- Abandoned creates leave orphan R2 keys (photos uploaded against a slug whose item row was never saved). Don't try to solve this with a staging-prefix scheme - at this scale, write a small GC script `scripts/gc-r2.ts` that lists every R2 key under `items/`, lists every key referenced from `items.photos` in Turso, and deletes the diff. Run it manually every month or two. ~30 lines of code; not a step in this plan, just a tool to keep handy.
+- Abandoned creates leave orphan R2 keys (photos uploaded against a slug whose item row was never saved). Don't try to solve this with a staging-prefix scheme - at this scale, write a small GC script `scripts/gc-r2.ts` that lists every R2 key, lists every key referenced from `items.photos` in Turso, and deletes the diff. Run it manually every month or two. ~30 lines of code; not a step in this plan, just a tool to keep handy.
 - If the admin changes an item's slug after photos are already uploaded under the old slug, **do not rewrite R2 keys**. Photo `key` is stored per-photo in `items.photos`; the slug is just a URL handle. They're decoupled by design.
 
 ## Step 9: Cart and contact flow

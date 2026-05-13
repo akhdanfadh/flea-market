@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PageTwoRouteImport } from './routes/page-two'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ImagesSplatRouteImport } from './routes/images/$'
+import { Route as AdminApiUploadRouteImport } from './routes/admin/api/upload'
 
 const PageTwoRoute = PageTwoRouteImport.update({
   id: '/page-two',
@@ -22,31 +24,49 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImagesSplatRoute = ImagesSplatRouteImport.update({
+  id: '/images/$',
+  path: '/images/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminApiUploadRoute = AdminApiUploadRouteImport.update({
+  id: '/admin/api/upload',
+  path: '/admin/api/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/page-two': typeof PageTwoRoute
+  '/images/$': typeof ImagesSplatRoute
+  '/admin/api/upload': typeof AdminApiUploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/page-two': typeof PageTwoRoute
+  '/images/$': typeof ImagesSplatRoute
+  '/admin/api/upload': typeof AdminApiUploadRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/page-two': typeof PageTwoRoute
+  '/images/$': typeof ImagesSplatRoute
+  '/admin/api/upload': typeof AdminApiUploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/page-two'
+  fullPaths: '/' | '/page-two' | '/images/$' | '/admin/api/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/page-two'
-  id: '__root__' | '/' | '/page-two'
+  to: '/' | '/page-two' | '/images/$' | '/admin/api/upload'
+  id: '__root__' | '/' | '/page-two' | '/images/$' | '/admin/api/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PageTwoRoute: typeof PageTwoRoute
+  ImagesSplatRoute: typeof ImagesSplatRoute
+  AdminApiUploadRoute: typeof AdminApiUploadRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +85,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/images/$': {
+      id: '/images/$'
+      path: '/images/$'
+      fullPath: '/images/$'
+      preLoaderRoute: typeof ImagesSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/api/upload': {
+      id: '/admin/api/upload'
+      path: '/admin/api/upload'
+      fullPath: '/admin/api/upload'
+      preLoaderRoute: typeof AdminApiUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PageTwoRoute: PageTwoRoute,
+  ImagesSplatRoute: ImagesSplatRoute,
+  AdminApiUploadRoute: AdminApiUploadRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
