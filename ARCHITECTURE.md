@@ -273,9 +273,7 @@ Client-side, no DB involvement.
   "compatibility_date": "2026-05-13", // pinned; bump deliberately when adopting new runtime behavior
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "routes": [
-    { "pattern": "akhdan.dev/flea-market/*", "zone_name": "akhdan.dev" },
-  ],
+  "routes": [{ "pattern": "akhdan.dev/flea-market/*", "zone_name": "akhdan.dev" }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }],
   "vars": {
     "DEFAULT_CURRENCY": "JPY",

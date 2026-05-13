@@ -1,6 +1,6 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute('/page-two')({ component: PageTwo })
+export const Route = createFileRoute("/page-two")({ component: PageTwo });
 
 function PageTwo() {
   return (
@@ -12,5 +12,5 @@ function PageTwo() {
         </Link>
       </p>
     </div>
-  )
+  );
 }

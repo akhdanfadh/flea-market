@@ -13,3 +13,4 @@ __unconfig*
 todos.json
 .dev.vars
 worker-configuration.d.ts
+lefthook-local.yml

@@ -1,0 +1,39 @@
+pre-commit:
+  parallel: true
+  jobs:
+    # ASCII sanitizers. Two non-obvious choices:
+    # - Use `perl -Mutf8 -CSD -i -pe` rather than `sed -i ''`. BSD sed (macOS)
+    #   and GNU sed (Linux) take different -i syntax, and BSD sed also chokes
+    #   on multi-byte UTF-8 character classes.
+    # - Exclude lefthook.yml itself. The job's own `run` line literally
+    #   contains the characters being sanitized; without the exclusion,
+    #   stage_fixed would rewrite these patterns into their ASCII targets the
+    #   first time the file is staged.
+    - name: replace-emdash-endash
+      run: perl -Mutf8 -CSD -i -pe 's/[—–]/-/g' {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,md,json,yaml,yml}"
+      exclude: "lefthook*.yml"
+      stage_fixed: true
+    - name: replace-right-arrow
+      run: perl -Mutf8 -CSD -i -pe 's/[→⟶⇒]/->/g' {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,md,json,yaml,yml}"
+      exclude: "lefthook*.yml"
+      stage_fixed: true
+    - name: replace-left-arrow
+      run: perl -Mutf8 -CSD -i -pe 's/[←⟵⇐]/<-/g' {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,md,json,yaml,yml}"
+      exclude: "lefthook*.yml"
+      stage_fixed: true
+    - name: replace-section
+      run: perl -Mutf8 -CSD -i -pe 's/§/#/g' {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,md,json,yaml,yml}"
+      exclude: "lefthook*.yml"
+      stage_fixed: true
+
+    - name: format
+      run: pnpm oxfmt --no-error-on-unmatched-pattern {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,css,html,yaml,yml}"
+      stage_fixed: true
+    - name: lint
+      run: pnpm oxlint --deny-warnings {staged_files}
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
