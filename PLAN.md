@@ -8,26 +8,48 @@ This plan is written for execution with Claude Code. Each step has a clear deliv
 
 Before starting step 1:
 
-- [ ] Cloudflare account with `akhdan.dev` configured as a zone
-- [ ] Wrangler CLI installed and authenticated (`wrangler whoami` works)
-- [ ] Turso CLI installed and authenticated (`turso auth whoami` works)
-- [ ] Node.js 20+ and pnpm installed
-- [ ] A new empty GitHub repo created (e.g. `flea-market`)
-- [ ] Read `ARCHITECTURE.md` end to end
+- [x] Cloudflare account with `akhdan.dev` configured as a zone
+- [x] Wrangler CLI installed and authenticated (`wrangler whoami` works)
+- [x] Turso CLI installed and authenticated (`turso auth whoami` works)
+- [x] Node.js 20+ and pnpm installed
+- [x] A new empty GitHub repo created (e.g. `flea-market`)
+- [x] Read `ARCHITECTURE.md` end to end
 
 ## Step 1: Scaffold TanStack Start, deploy to a Worker
+
+**Status**: Done (2026-05-13) - live at <https://flea-market.akhdanfadh.workers.dev/flea-market/>
 
 **Goal**: A blank TanStack Start app deployed to `*.workers.dev`, basepath configured, no domain routing yet.
 
 Tasks:
 
-- Scaffold with the Cloudflare-preconfigured template:
+- Scaffold via the TanStack CLI directly. The Cloudflare-wrapped form
+  (`npm create cloudflare@latest -- flea-market --framework=tanstack-start`)
+  errored with "Unsupported framework: tanstack-start" on c3 v2.68.2;
+  invoking `@tanstack/cli` directly bypasses the wrapper bug and is what c3
+  wraps anyway:
 
   ```sh
-  npm create cloudflare@latest -- flea-market --framework=tanstack-start
+  npx @tanstack/cli@latest create flea-market \
+    --framework React --deployment cloudflare \
+    --package-manager pnpm \
+    --no-git --no-examples --no-toolchain --no-intent --non-interactive
   ```
 
-  This installs `@cloudflare/vite-plugin` and wires the `cloudflare({ viteEnvironment: { name: "ssr" } })` plugin **before** the TanStack Start plugin in `vite.config.ts`. Plugin order matters; do not reorder.
+  - `--no-git` skips repo init (we already have one).
+  - `--no-toolchain` skips biome/eslint since we want oxlint/oxfmt.
+  - `--no-examples` keeps the home route minimal.
+
+  If the repo directory already has content (like ours, holding only docs),
+  scaffold into a sibling directory, move generated files in, then `rm` the
+  sibling. The TanStack CLI fails on a non-empty target without `--force`.
+
+  The current scaffold (May 2026) installs `@cloudflare/vite-plugin` and
+  wires `cloudflare({ viteEnvironment: { name: "ssr" } })` **before** the
+  TanStack Start plugin in `vite.config.ts`. Plugin order matters; do not
+  reorder. It also ships Tailwind v4 + Vitest + TanStack devtools +
+  lucide-react - a richer base than older scaffolds; treat these as
+  "already installed" when later steps reference them.
 
 - Set the TanStack Router config to `basepath: '/flea-market'`
 - Set the Vite config `base: '/flea-market/'` so static asset URLs are correct
@@ -37,12 +59,13 @@ Tasks:
   - `"compatibility_date": "2026-05-13"` (pinned; bump deliberately later)
 - Add a single home route that displays "Hello, flea market" with a `<Link>` to a second route to verify routing works
 - Run `pnpm cf-typegen` to generate `worker-configuration.d.ts` (binds `env.BUCKET`, secrets, vars into the TypeScript type system). Re-run whenever `wrangler.jsonc` bindings change.
-- Pin `@tanstack/react-start` to `>= 1.138.0` (Dec 2025). Earlier versions lack the static-prerender behavior the Cloudflare adapter assumes.
 - Set up tooling:
-  - Install `oxlint` and `oxfmt` as dev deps
-  - Add `package.json` scripts: `dev` (`vite dev`), `build` (`vite build`), `deploy` (`vite build && wrangler deploy`), `typecheck` (`tsc --noEmit`), `lint` (`oxlint .`), `lint:fix` (`oxlint --fix .`), `format` (`oxfmt --check .`), `format:fix` (`oxfmt .`), `cf-typegen` (`wrangler types`)
+  - Install `oxlint`, `oxfmt`, and `lefthook` as dev deps
+  - Add `package.json` scripts: `dev` (`vite dev`), `build` (`vite build`), `deploy` (`vite build && wrangler deploy`), `typecheck` (`tsc --noEmit`), `lint` (`oxlint .`), `lint:fix` (`oxlint --fix .`), `format` (`oxfmt --check .`), `format:fix` (`oxfmt .`), `prepare` (`lefthook install`), `cf-typegen` (`wrangler types`)
   - Pin the package manager via `"packageManager": "pnpm@<version>"` in `package.json`
-- Add `.gitignore` entries: `node_modules`, `dist`, `.wrangler`, `.dev.vars`, `worker-configuration.d.ts` (regenerated, not committed)
+  - Add `.oxfmtrc.json` and `.oxlintrc.json` (zero-config defaults plus `sortImports`, `sortPackageJson`, and an `ignorePatterns` entry for `**/dist/**` and `**/src/routeTree.gen.ts`)
+  - Add `lefthook.yml` with parallel pre-commit jobs: ASCII sanitizers (em-dash, arrows, section sign) then `oxfmt` (`stage_fixed: true`) then `oxlint --deny-warnings`. Sanitizers must `exclude: "lefthook*.yml"` or `stage_fixed` will rewrite the sanitizers' own patterns the first time the file is staged. Use `perl -Mutf8 -CSD -i -pe` (portable across BSD/GNU sed) for the substitutions.
+- Add `.gitignore` entries: `node_modules`, `dist`, `.wrangler`, `.dev.vars`, `worker-configuration.d.ts` (regenerated, not committed), `lefthook-local.yml` (per-machine hook overrides)
 - Run `pnpm run deploy`
 
 Verify:
@@ -93,7 +116,7 @@ Pitfalls:
 
 Tasks:
 
-- Install Tailwind v4 (or whatever is current) per Vite docs
+- Tailwind v4 + `@tailwindcss/vite` already ship with the current `@tanstack/cli create` scaffold (verified in Step 1). Confirm it compiles; no install needed.
 - Run `pnpm dlx shadcn@latest init -t start` - the `-t start` template flag is the first-class TanStack Start path; it auto-configures Tailwind and the `@/*` alias, skipping the Next.js-specific defaults
 - Install Button, Sheet, Card, Input, Label, Sonner, AlertDialog components via `pnpm dlx shadcn@latest add ...` (shadcn's old Toast component is superseded; use Sonner for all toast notifications)
 - Verify by adding a Button to the home page and confirming it's styled
@@ -376,7 +399,7 @@ Likely v2 additions and where to slot them:
 
 ## Notes for working with Claude Code
 
-- Commit after every step, not within steps
+- Each step lands as one or more commits; default is one commit per step, split only when there's a clear reviewability benefit (e.g. isolating raw generator/scaffold output from customizations). See `CLAUDE.md` §4 Workflow.
 - Run `pnpm run deploy` after every step and verify in production before moving on
 - Keep `ARCHITECTURE.md` updated if any decision changes during implementation
 - If a step turns into a multi-hour rabbit hole, stop and ask before continuing
