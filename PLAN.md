@@ -137,6 +137,8 @@ This gracefully redirects anyone who has the old URL bookmarked.
 
 ## Step 3: Tailwind + shadcn/ui
 
+**Status**: Done (2026-05-13). Initialized shadcn with Base UI primitives (`-b base`), `nova` style, neutral base color, pointer cursor on buttons, Inter font. Installed Button, Sheet, Card, Input, Label, Sonner, AlertDialog. Verified Button + Sheet render styled on the home route in production.
+
 **Goal**: Tailwind compiles correctly through Vite, shadcn CLI works, a Button and Sheet component render with the right styling.
 
 Tasks:

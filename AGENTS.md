@@ -90,6 +90,11 @@ fetches current docs and avoids stale training data.
    define their schema with `zod` so TanStack Router can type them.
 6. Cart state lives only in the Zustand store + localStorage; never persist cart to
    Turso.
+7. shadcn components use Base UI primitives (`components.json` has `style: base-nova`),
+   not Radix. New `shadcn add` invocations pull Base UI variants automatically. When
+   consulting shadcn docs, use the Base UI examples (`/docs/components/base/...`),
+   not the Radix paths. See `.agents/skills/shadcn/rules/base-vs-radix.md` for the
+   API differences (e.g. `render` prop vs `asChild`).
 
 ### Dependencies and tooling
 
