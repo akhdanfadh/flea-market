@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "akhdan-flea-market",
-  "compatibility_date": "2025-09-02",
+  "compatibility_date": "2026-05-13",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry"
 }
