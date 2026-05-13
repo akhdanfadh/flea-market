@@ -17,7 +17,7 @@ pnpm install
 pnpm dev              # Vite + Miniflare (real R2/KV/env bindings from .dev.vars and wrangler.jsonc)
 ```
 
-Required secrets live in `.dev.vars` (gitignored) for local and `wrangler secret put <NAME>` for production. See `AGENTS.md` §5.
+Required secrets live in `.dev.vars` (gitignored) for local and `wrangler secret put <NAME>` for production. See `AGENTS.md` #5.
 
 ## Deploy
 
@@ -29,16 +29,16 @@ The Workers Custom Domain on `flea-market.akhdan.dev` is declared in `wrangler.j
 
 ## Scripts
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Local dev server with Cloudflare bindings via Miniflare |
-| `pnpm build` | Vite production build |
-| `pnpm run deploy` | Build and `wrangler deploy` |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm lint` / `pnpm format` | `oxlint` / `oxfmt` (check mode) |
-| `pnpm lint:fix` / `pnpm format:fix` | Apply fixes |
-| `pnpm cf-typegen` | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc` bindings |
-| `pnpm db:push` / `pnpm db:studio` / `pnpm db:seed` | Drizzle + Turso (added in Step 4) |
+| Command                                            | What it does                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `pnpm dev`                                         | Local dev server with Cloudflare bindings via Miniflare                        |
+| `pnpm build`                                       | Vite production build                                                          |
+| `pnpm run deploy`                                  | Build and `wrangler deploy`                                                    |
+| `pnpm typecheck`                                   | `tsc --noEmit`                                                                 |
+| `pnpm lint` / `pnpm format`                        | `oxlint` / `oxfmt` (check mode)                                                |
+| `pnpm lint:fix` / `pnpm format:fix`                | Apply fixes                                                                    |
+| `pnpm cf-typegen`                                  | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc` bindings |
+| `pnpm db:push` / `pnpm db:studio` / `pnpm db:seed` | Drizzle + Turso (added in Step 4)                                              |
 
 ## Docs
 

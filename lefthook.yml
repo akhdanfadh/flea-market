@@ -32,7 +32,7 @@ pre-commit:
 
     - name: format
       run: pnpm oxfmt --no-error-on-unmatched-pattern {staged_files}
-      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,css,html,yaml,yml}"
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,css,html,yaml,yml,md}"
       stage_fixed: true
     - name: lint
       run: pnpm oxlint --deny-warnings {staged_files}

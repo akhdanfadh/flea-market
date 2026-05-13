@@ -1,5 +1,5 @@
 {
-  "ignorePatterns": ["**/dist/**", "**/src/routeTree.gen.ts"],
+  "ignorePatterns": ["**/dist/**", "**/src/routeTree.gen.ts", ".agents/skills/**/*.md"],
   "sortImports": {
     "groups": [
       "type-import",

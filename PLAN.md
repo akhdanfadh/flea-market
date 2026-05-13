@@ -150,7 +150,7 @@ Verify:
 
 - shadcn components render correctly (proper colors, fonts, hover states)
 - No CSS import or path errors in the build log
-- Production build still works after these additions (run `pnpm run deploy` and confirm)
+- Production build still works after these additions (user runs `pnpm run deploy` after reviewing the diff; agent does not deploy)
 
 Pitfalls:
 
@@ -426,7 +426,7 @@ Likely v2 additions and where to slot them:
 ## Notes for working with Claude Code
 
 - Each step lands as one or more commits; default is one commit per step, split only when there's a clear reviewability benefit (e.g. isolating raw generator/scaffold output from customizations). See `CLAUDE.md` #4 Workflow.
-- Run `pnpm run deploy` after every step and verify in production before moving on
+- After every step, run `pnpm typecheck`, `pnpm lint`, and `pnpm format`, then stop and wait for review. Agents do NOT run `pnpm run deploy` or `wrangler deploy` - the user reviews the diff, commits, deploys, and verifies in production. See `CLAUDE.md` #4 Workflow rule 2.
 - Keep `ARCHITECTURE.md` updated if any decision changes during implementation
 - If a step turns into a multi-hour rabbit hole, stop and ask before continuing
 - Prefer explicit, type-safe code over clever; this project favors clarity since you'll come back to it months later

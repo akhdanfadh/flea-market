@@ -62,10 +62,14 @@ fetches current docs and avoids stale training data.
    benefit (e.g. isolating raw generator/scaffold output from our customizations,
    or separating a dependency bump from the code change that consumes it). Splits
    should be coarse and meaningful, not per-file churn.
-2. Run `pnpm run deploy` after every step and verify in production before moving on.
-   Type checks and unit tests verify correctness of code; only production verifies
-   correctness of the deployment (Workers Route precedence, R2 binding, secrets,
-   Image Transformations, cache).
+2. After every step, prepare changes and run `pnpm typecheck`, `pnpm lint`, and
+   `pnpm format`; then **stop and wait for review**. Agents must NOT run
+   `pnpm run deploy`, `wrangler deploy`, or any production-touching command
+   without explicit user approval. The user reviews the diff, commits, deploys,
+   and verifies in prod themselves. Type checks and unit tests verify correctness
+   of code; only production verifies correctness of the deployment (Workers Route
+   precedence, R2 binding, secrets, Image Transformations, cache) - but that
+   verification happens after a human-driven deploy, not before.
 3. If a step turns into a multi-hour rabbit hole, stop and ask before continuing.
 4. Keep `ARCHITECTURE.md` and `PLAN.md` updated when implementation reveals a wrong
    assumption. The docs are the source of truth, not a historical artifact.
