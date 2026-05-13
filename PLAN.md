@@ -84,6 +84,8 @@ Pitfalls:
 
 ## Step 2: Attach Workers Custom Domain `flea-market.akhdan.dev`
 
+**Status**: Done (2026-05-13) - live at <https://flea-market.akhdan.dev/>. Worker serves the entire subdomain; Hugo on Pages continues to serve the apex `akhdan.dev`. The orphaned `akhdan.dev/flea-market*` route from the failed sub-path attempt was cleaned up via the Cloudflare REST API; see Pitfalls.
+
 **Goal**: The Worker serves the entire `flea-market.akhdan.dev` subdomain; Hugo on Pages continues to serve `akhdan.dev`.
 
 Why a subdomain (not a sub-path on the apex): TanStack Start + Cloudflare Workers Static Assets does not support a basepath-mounted deployment cleanly. Cloudflare's static-asset layer requires the on-disk asset layout to literally mirror the URL prefix; Vite's `base` only rewrites HTML URLs, not file paths. The framework's own `start-basic-cloudflare` example sidesteps this by deploying at a domain root. A Custom Domain on a subdomain is the framework-blessed pattern.
