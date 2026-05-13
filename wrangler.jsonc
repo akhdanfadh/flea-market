@@ -6,6 +6,9 @@
   "main": "@tanstack/react-start/server-entry",
   "routes": [{ "pattern": "flea-market.akhdan.dev", "custom_domain": true }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }],
+  "vars": {
+    "DEFAULT_LANGUAGE": "en",
+  },
   // Match the implicit defaults when `routes` is set, but state them
   // explicitly so `wrangler deploy` doesn't emit a warning on every run.
   "workers_dev": false,

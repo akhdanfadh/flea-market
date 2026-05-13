@@ -177,7 +177,7 @@ Tasks:
   - `item_translations` table with composite primary key on (item_id, language)
   - CHECK constraint on price columns
 - Configure `drizzle.config.ts` to point at the Turso URL + auth token. Load `.dev.vars` via Node's native `process.loadEnvFile('.dev.vars')` so no extra dotenv dep is needed
-- Apply the schema using **`drizzle-kit push`** - for this project's scale, push directly to Turso each schema change rather than generating versioned migration files. Versioned migrations are overkill for a single-admin, single-deployment app. If the project ever fans out to multiple instances (Jakarta, Singapore), revisit and switch to `generate` + a runtime migrator.
+- Apply the schema using **`drizzle-kit push`** - for this project's scale, push directly to Turso each schema change rather than generating versioned migration files. Versioned migrations are overkill for a single-admin, single-deployment app. If the project ever fans out to multiple instances (Jakarta), revisit and switch to `generate` + a runtime migrator.
 - Create a seed script `scripts/seed.ts` that inserts 3 sample items with English and Indonesian translations (with one item intentionally en-only to exercise the language-fallback path)
 - Create a read-back verification script `scripts/db-check.ts` that selects from `items` and `item_translations` and prints a summary
 - Add scripts to `package.json`: `db:push` (`drizzle-kit push`), `db:studio` (`drizzle-kit studio`), `db:seed` (`node --no-warnings=ExperimentalWarning scripts/seed.ts`), `db:check` (same shape, for db-check.ts)
@@ -278,15 +278,18 @@ Tasks:
 
 - Decide the canonical URL form by setting `trailingSlash` on the TanStack Router config in `src/router.tsx`. TanStack Router's default is `'never'` (strip trailing slash on sub-routes), but Cloudflare Workers Static Assets defaults to `auto-trailing-slash` for the root, so `flea-market.akhdan.dev` will always 307 to `flea-market.akhdan.dev/`. Recommended: `trailingSlash: 'always'` for consistency between root and sub-routes (`/some-item/` instead of `/some-item`), matching Hugo's convention on the apex. Verify by curling `/some-item` (no slash) and confirming it 307s to `/some-item/`
 - Build `formatPrice(amount, currency)` and `MINOR_UNITS` constant in `src/lib/money.ts` per ARCHITECTURE.md (locale hardcoded to `'en'`)
-- Implement language resolution helper `src/lib/lang.ts`:
-  - `getLanguage(request)`: cookie `lang` -> `Accept-Language` parsing for `en`/`id` -> `env.DEFAULT_LANGUAGE`
-  - Toggle endpoint at `/lang/$lang` that validates against `{en, id}`, sets the `lang` cookie (`Path=/`, 1-year `Max-Age`), and 302-redirects to `Referer` if same-origin else `/`
+- Implement language resolution helper `src/lib/lang.server.ts` (the `.server.ts` suffix tells TanStack Start's bundler to refuse client imports — the module touches `getCookie` / `getRequestHeader` / `env`, which only exist server-side):
+  - `getLanguage()`: cookie `lang` -> `Accept-Language` parsing for `en`/`id` -> `env.DEFAULT_LANGUAGE`. Uses TanStack Start's `getCookie` and `getRequestHeader` from `@tanstack/react-start/server` — both read from request-scoped AsyncLocalStorage and throw outside a request context, so this function is only safe to call from server fn handlers, server route handlers, and route loaders
+  - Toggle endpoint at `/lang/$lang` that validates against `{en, id}`, sets the `lang` cookie (`Path=/`, 1-year `Max-Age`, `SameSite=Lax`, `Secure`, `HttpOnly`), and 302-redirects to a same-**origin** `Referer` (compare `URL.origin`, not hostname, to catch port/scheme mismatch) else `/`
+- Wire the resolved language end-to-end into the document shell:
+  - Root loader in `src/routes/__root.tsx` calls a `createServerFn` returning `{ language: getLanguage() }`
+  - `RootDocument` reads via `Route.useLoaderData()` and renders `<html lang={language}>` so SSR's first paint matches the cookie; no client-side flicker
 - List page at `/`:
   - `createServerFn` loader resolves language, then fetches all items with the matching translation row (falling back to `en` if the requested language is absent)
   - Renders a grid of Cards: thumbnail (via `optimizedImageUrl(photos[0].key, { width: 400 })`), title, price, status badge
   - Status badge: `available` (green), `reserved` (yellow), `sold` (gray, item dimmed but still visible)
   - Filter controls: status (All / Available / Reserved / Sold) and price (All / Free / Paid)
-  - Filter state lives in URL search params via TanStack Router; define a `zod` schema for type-safe parsing. Pin `zod >= 3.24` so it works with `validateSearch` directly via Standard Schema - no `@tanstack/zod-adapter` package needed
+  - Filter state lives in URL search params via TanStack Router; define a `zod` schema for type-safe parsing. Install Zod 4 (latest stable); both Zod 3.24+ and 4 work with `validateSearch` directly via Standard Schema — no `@tanstack/zod-adapter` package needed
   - Client-side search box: substring match on title/description (no server work)
   - Language toggle button (anchor to `/lang/id` or `/lang/en` depending on current state)
 - Detail page at `/$slug`:
@@ -299,10 +302,11 @@ Verify:
 - List page shows all seed items with real R2 photos rendered through `/cdn-cgi/image/...`
 - Filter buttons work, URL updates, deep-linking respects filter state
 - Detail pages load by slug
-- Prices format correctly: ¥5,000, Rp250,000, S$50.25
+- Prices format correctly: ¥5,000, Rp250,000, $50.25
 - Sold items appear with the correct visual treatment (dimmed + badge)
 - Language toggle flips between `en` and `id` translations on items that have both
 - Items without an `id` translation fall back to `en` when viewed in Indonesian
+- `<html lang>` on the document follows the resolved language on next request after the toggle (verify in DevTools' Elements panel and in `view-source:`)
 
 Pitfalls:
 

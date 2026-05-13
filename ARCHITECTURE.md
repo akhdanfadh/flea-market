@@ -1,6 +1,6 @@
 # Architecture
 
-A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the apex `akhdan.dev`. Designed to be redeployable in different cities (Sendai today, Jakarta/Singapore/Sydney later) by changing environment variables, no code or schema changes.
+A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the apex `akhdan.dev`. Designed to be redeployable in different cities (Sendai today, Jakarta next) by changing environment variables, no code or schema changes.
 
 ## Goals and non-goals
 
@@ -82,8 +82,8 @@ Caveats:
 | ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `id`             | uuid pk          |                                                                                                                                  |
 | `slug`           | text unique      | Format: `YYYYMMDD-{kebab-case-title}`. Indexed                                                                                   |
-| `price_amount`   | integer nullable | In minor units (yen and rupiah have 0 decimals, SGD and AUD have 2). Null means free                                             |
-| `price_currency` | text nullable    | ISO 4217: `JPY` / `IDR` / `SGD` / `AUD`. Null when free                                                                          |
+| `price_amount`   | integer nullable | In minor units (yen and rupiah have 0 decimals, USD has 2). Null means free                                                      |
+| `price_currency` | text nullable    | ISO 4217: `JPY` / `IDR` / `USD`. Null when free                                                                                  |
 | `status`         | text             | `available` / `reserved` / `sold`                                                                                                |
 | `photos`         | json             | Ordered array of `{ key: string, alt?: string }` objects. `key` is the R2 object key; `alt` is an optional accessibility caption |
 | `created_at`     | timestamp        |                                                                                                                                  |
@@ -114,12 +114,11 @@ Storage is in minor units. Concretely:
 MINOR_UNITS = {
   JPY: 0,
   IDR: 0,
-  SGD: 2,
-  AUD: 2,
+  USD: 2,
 };
 ```
 
-A ¥5,000 item is stored as `price_amount = 5000`, `price_currency = 'JPY'`. An S$50.25 item is `price_amount = 5025`, `price_currency = 'SGD'`.
+A ¥5,000 item is stored as `price_amount = 5000`, `price_currency = 'JPY'`. A US$50.25 item is `price_amount = 5025`, `price_currency = 'USD'`.
 
 Display uses `Intl.NumberFormat`:
 
@@ -133,7 +132,7 @@ function formatPrice(amount: number, currency: string): string {
 }
 ```
 
-Result: `¥5,000`, `Rp250,000`, `S$50.25`, `A$80.00`.
+Result: `¥5,000`, `Rp250,000`, `$50.25`.
 
 The locale is hardcoded to `'en'` regardless of page language. Decision: currency symbols and digit grouping are stable across visitors, and a mixed-locale UX (English UI rendering `Rp1.000.000` Indonesian-style) is more jarring than helpful at this scale. Revisit only if the catalog targets a single non-English locale exclusively.
 
@@ -145,17 +144,17 @@ The two-table design (items + item_translations) decouples language from item id
 
 **Language state mechanism**:
 
-A single cookie `lang` (values `en` or `id`), `Path=/`, 1-year expiry. The server resolves the active language on every request in this order:
+A single cookie `lang` (values `en` or `id`), `Path=/`, 1-year expiry. The server resolves the active language on every request via `getLanguage()` in `src/lib/lang.server.ts`, in this order:
 
 1. `lang` cookie if present and valid
 2. `Accept-Language` header parsed for `en` / `id` (any other value falls through)
 3. `env.DEFAULT_LANGUAGE` (defaults to `en`)
 
-The resolved language is passed to loaders and components via the route context so SSR renders the correct translation on first paint - no client-side flip after hydration.
+The resolved language is returned from the root loader so `<html lang={...}>` and every page loader see the correct value — SSR renders the right translation on first paint, no client-side flip after hydration.
 
 **Toggle endpoint**:
 
-`GET /lang/:lang` validates the `:lang` param against `{en, id}`, sets the cookie with the attributes above, then 302-redirects to `Referer` (verified to be on the `flea-market.akhdan.dev` origin; falls back to `/` otherwise). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable.
+`GET /lang/$lang` (`src/routes/lang/$lang.ts`) validates the param against the `LANGUAGES` constant in `src/db/schema.ts`, sets the cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `Secure`, `HttpOnly`), then 302-redirects to `Referer` (compared by `URL.origin`, not hostname, so port/scheme mismatch is caught; falls back to `/` on missing / unparsable / cross-origin). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable. `HttpOnly` is included as defense-in-depth — `getLanguage()` reads the cookie server-side, no JS read path exists; revisit if a concrete client-side reader ever lands.
 
 **Translation lookup**:
 
@@ -252,7 +251,7 @@ Client-side, no DB involvement.
 - Each item card on the list and detail pages shows an "Add to cart" / "Remove" button (toggled by cart membership)
 - A floating badge in the corner shows cart count; clicking it opens a Sheet (shadcn)
 - The Sheet lists selected items with title, price, remove button
-- A "Total" section sums prices per currency (so a JPY + SGD cart shows `¥5,000 + S$50.00`)
+- A "Total" section sums prices per currency (so a JPY + USD cart shows `¥5,000 + $50.00`)
 - Free items appear in the list with a "Free" badge and don't contribute to the total
 - Reserved or sold items that are still in the cart from a previous session appear with the relevant badge, are excluded from the message, and trigger a banner
 
@@ -278,7 +277,7 @@ Client-side, no DB involvement.
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }],
   "vars": {
     "DEFAULT_CURRENCY": "JPY",
-    "SUPPORTED_CURRENCIES": "JPY,IDR,SGD,AUD",
+    "SUPPORTED_CURRENCIES": "JPY,IDR,USD",
     "DEFAULT_LANGUAGE": "en",
     "FB_HANDLE": "your-facebook-handle",
   },

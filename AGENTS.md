@@ -10,8 +10,8 @@ bilingual content (English required, Indonesian optional).
 Core product model:
 
 1. One owner curates a small catalog (~30 active items) per deployment.
-2. Each deployment targets one city / one default currency (Sendai today; Jakarta,
-   Singapore, Sydney later) - driven by env vars, no code or schema changes.
+2. Each deployment targets one city / one default currency (Sendai today;
+   Jakarta next) - driven by env vars, no code or schema changes.
 3. Visitors browse, filter, and assemble a cart that generates a structured contact
    message; no payments, no accounts.
 4. The admin authenticates with a single token-cookie; there is no concept of users
@@ -84,13 +84,23 @@ fetches current docs and avoids stale training data.
    Never multiply or divide a stored amount outside `src/lib/money.ts`.
 3. Images render through `/cdn-cgi/image/...` URLs via the `optimizedImageUrl` helper;
    do not embed raw R2 URLs in templates.
-4. Server-only code (DB client, R2 binding, secret reads) belongs in `createServerFn`
-   handlers or route loaders, never in components.
+4. Server-only code (DB client, R2 binding, secret reads, request-context helpers
+   like `getCookie` / `getRequestHeader` / `setResponseHeader` from
+   `@tanstack/react-start/server`) belongs in `createServerFn` handlers or route
+   loaders, never in components. When a helper module touches any of those — and
+   would otherwise be importable from the client — name it `*.server.ts` (e.g.
+   `src/lib/lang.server.ts`) so TanStack Start's bundler refuses client imports
+   at build time instead of letting them fail at runtime.
 5. URL search params are the source of truth for filter/sort state on the list page;
    define their schema with `zod` so TanStack Router can type them.
-6. Cart state lives only in the Zustand store + localStorage; never persist cart to
+6. Enum-shaped column values (`status`, `language`) live as `as const` arrays in
+   `src/db/schema.ts` (e.g. `LANGUAGES`, `ITEM_STATUSES`) and are imported
+   wherever runtime validation is needed — type guards, route param checks, toggle
+   endpoints. Single source of truth for both the TypeScript union type and the
+   runtime allow-list; adding a third language means editing one constant.
+7. Cart state lives only in the Zustand store + localStorage; never persist cart to
    Turso.
-7. shadcn components use Base UI primitives (`components.json` has `style: base-nova`),
+8. shadcn components use Base UI primitives (`components.json` has `style: base-nova`),
    not Radix. New `shadcn add` invocations pull Base UI variants automatically. When
    consulting shadcn docs, use the Base UI examples (`/docs/components/base/...`),
    not the Radix paths. See `.agents/skills/shadcn/rules/base-vs-radix.md` for the

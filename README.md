@@ -2,7 +2,7 @@
 
 A self-hosted secondhand-listing app for [akhdan.dev](https://akhdan.dev).
 
-Live at **<https://flea-market.akhdan.dev>**, a dedicated Cloudflare Workers subdomain alongside the Hugo site at the apex `akhdan.dev`. Single-admin CRUD, public browse plus a cart-to-contact flow, bilingual content (English required, Indonesian optional). Designed to redeploy in different cities (Sendai, Jakarta, Singapore, Sydney) by changing env vars - no code or schema changes.
+Live at **<https://flea-market.akhdan.dev>**, a dedicated Cloudflare Workers subdomain alongside the Hugo site at the apex `akhdan.dev`. Single-admin CRUD, public browse plus a cart-to-contact flow, bilingual content (English required, Indonesian optional). Designed to redeploy in different cities (Sendai today, Jakarta next) by changing env vars - no code or schema changes.
 
 ## Stack
 
