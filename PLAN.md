@@ -12,7 +12,7 @@ Before starting step 1:
 - [ ] Wrangler CLI installed and authenticated (`wrangler whoami` works)
 - [ ] Turso CLI installed and authenticated (`turso auth whoami` works)
 - [ ] Node.js 20+ and pnpm installed
-- [ ] A new empty GitHub repo created (e.g. `akhdan-flea-market`)
+- [ ] A new empty GitHub repo created (e.g. `flea-market`)
 - [ ] Read `ARCHITECTURE.md` end to end
 
 ## Step 1: Scaffold TanStack Start, deploy to a Worker
@@ -24,7 +24,7 @@ Tasks:
 - Scaffold with the Cloudflare-preconfigured template:
 
   ```sh
-  npm create cloudflare@latest -- akhdan-flea-market --framework=tanstack-start
+  npm create cloudflare@latest -- flea-market --framework=tanstack-start
   ```
 
   This installs `@cloudflare/vite-plugin` and wires the `cloudflare({ viteEnvironment: { name: "ssr" } })` plugin **before** the TanStack Start plugin in `vite.config.ts`. Plugin order matters; do not reorder.
@@ -47,7 +47,7 @@ Tasks:
 
 Verify:
 
-- The Worker URL (e.g. `akhdan-flea-market.{subdomain}.workers.dev/flea-market/`) loads the home page
+- The Worker URL (e.g. `flea-market.{subdomain}.workers.dev/flea-market/`) loads the home page
 - The internal `<Link>` navigates correctly and produces a URL like `.../flea-market/page-two`
 - No console errors
 - `pnpm typecheck`, `pnpm lint`, `pnpm format` all pass
@@ -114,7 +114,7 @@ Pitfalls:
 
 Tasks:
 
-- Run `turso db create akhdan-flea-market --location nrt`
+- Run `turso db create flea-market --location nrt`
 - Get the DB URL and an auth token: `turso db show ...` and `turso db tokens create ...`
 - Add both as Worker secrets: `wrangler secret put TURSO_DATABASE_URL`, `wrangler secret put TURSO_AUTH_TOKEN`
 - Add the same values to `.dev.vars` (gitignored) for local development
@@ -134,7 +134,7 @@ Tasks:
 
 Verify:
 
-- `turso db shell akhdan-flea-market` and `SELECT * FROM items` returns the seed rows
+- `turso db shell flea-market` and `SELECT * FROM items` returns the seed rows
 - Drizzle Studio (`pnpm db:studio`) can read the rows (works against remote Turso via the `authToken` in `drizzle.config.ts`)
 - A small TanStack `createServerFn` that selects from `items` returns data when called from a test route
 
@@ -152,11 +152,11 @@ This step now precedes the public list page so step 6 can render real photos aga
 
 Tasks:
 
-- Create R2 bucket: `wrangler r2 bucket create akhdan-flea-market`
+- Create R2 bucket: `wrangler r2 bucket create flea-market`
 - Add R2 binding to `wrangler.jsonc`:
 
   ```jsonc
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "akhdan-flea-market" }]
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }]
   ```
 
 - Re-run `pnpm cf-typegen` so `env.BUCKET` is typed
@@ -171,7 +171,7 @@ Tasks:
   - Returns `{ key }` as JSON
 - Build `optimizedImageUrl(key, { width })` in `src/lib/images.ts` that emits `/cdn-cgi/image/width={w},quality=75,format=auto/{R2_PUBLIC_BASE}/{key}`
 - Seed one or two real photos for the existing seed items so step 6 can render them:
-  - From the local machine: `wrangler r2 object put akhdan-flea-market/items/<seed-slug>/seed-1.jpg --file=./fixtures/photo.jpg`
+  - From the local machine: `wrangler r2 object put flea-market/items/<seed-slug>/seed-1.jpg --file=./fixtures/photo.jpg`
   - Update the seed script to populate `photos: [{key: "items/<seed-slug>/seed-1.jpg"}]` and re-run `pnpm db:seed`
 
 Verify:

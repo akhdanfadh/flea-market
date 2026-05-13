@@ -269,14 +269,14 @@ Client-side, no DB involvement.
 
 ```jsonc
 {
-  "name": "akhdan-flea-market",
+  "name": "flea-market",
   "compatibility_date": "2026-05-13", // pinned; bump deliberately when adopting new runtime behavior
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "routes": [
     { "pattern": "akhdan.dev/flea-market/*", "zone_name": "akhdan.dev" },
   ],
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "akhdan-flea-market" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "flea-market" }],
   "vars": {
     "DEFAULT_CURRENCY": "JPY",
     "SUPPORTED_CURRENCIES": "JPY,IDR,SGD,AUD",
@@ -304,10 +304,10 @@ Same variables as above with development values; Wrangler loads automatically.
 
 - `pnpm run deploy` runs `vite build && wrangler deploy`
 - Workers Route is declared in `wrangler.jsonc` and provisioned on deploy
-- R2 bucket is created once via `wrangler r2 bucket create akhdan-flea-market`
+- R2 bucket is created once via `wrangler r2 bucket create flea-market`
 - Public R2 domain is enabled once via dashboard (one-time, doesn't move)
 - Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time)
-- Turso DB is created via `turso db create akhdan-flea-market --location nrt`
+- Turso DB is created via `turso db create flea-market --location nrt`
 - Drizzle migrations are run from the local machine against the Turso URL
 
 ## Cost ceiling
