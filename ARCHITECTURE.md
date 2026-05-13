@@ -32,7 +32,7 @@ A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a 
 | Deployment         | Cloudflare Workers                                                                     | `wrangler deploy`, `nodejs_compat` flag required                          |
 | Routing on domain  | Cloudflare Workers Custom Domain `flea-market.akhdan.dev`                              | Hugo on Pages continues to serve the apex `akhdan.dev`                    |
 | Database           | Turso (libSQL), primary region: Tokyo (`nrt`)                                          | Free tier: 5GB / 500M reads / 10M writes per month                        |
-| DB client          | `@libsql/client/web`                                                                   | Fetch-based, works in Workers                                             |
+| DB client          | `@libsql/client`                                                                       | Fetch-based, works in Workers (auto-selects the right entry point)        |
 | ORM                | Drizzle (`drizzle-orm/libsql`)                                                         |                                                                           |
 | Image storage      | Cloudflare R2                                                                          | 10GB free tier; zero egress                                               |
 | Image optimization | Cloudflare Image Transformations on R2-sourced URLs                                    | 5,000 unique transforms/month free; cached forever once generated         |
@@ -305,7 +305,7 @@ Same variables as above with development values; Wrangler loads automatically.
 - R2 bucket is created once via `wrangler r2 bucket create flea-market`
 - Public R2 domain is enabled once via dashboard (one-time, doesn't move)
 - Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time)
-- Turso DB is created via `turso db create flea-market --location nrt`
+- Turso DB is created via `turso db create flea-market --group <group>`. Groups carry the location; on a fresh Turso account a `default` group typically already exists in the region tied to the signup, and `turso group list` shows existing groups. Use `turso group create <name> --location nrt` to provision Tokyo if no Tokyo group exists yet
 - Drizzle migrations are run from the local machine against the Turso URL
 
 ## Cost ceiling

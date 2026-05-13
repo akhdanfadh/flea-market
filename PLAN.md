@@ -160,39 +160,42 @@ Pitfalls:
 
 ## Step 4: Turso, Drizzle, schema, migrations
 
-**Goal**: Turso database created in Tokyo region, Drizzle ORM configured, schema defined, schema applied, 2-3 seed items inserted.
+**Goal**: Turso database created in Tokyo region, Drizzle ORM configured, schema defined, schema applied, 3 seed items inserted.
 
 Tasks:
 
-- Run `turso db create flea-market --location nrt`
-- Get the DB URL and an auth token: `turso db show ...` and `turso db tokens create ...`
+- Confirm a Tokyo-region group exists: `turso group list`. Modern Turso provisions database location via **groups**, not a per-database `--location` flag. New accounts typically have a `default` group already in the region tied to signup. If no Tokyo group exists, create one: `turso group create default --location nrt`
+- Create the database in that group: `turso db create flea-market --group default` (substitute the group name from the previous step)
+- Get the DB URL and an auth token: `turso db show flea-market` and `turso db tokens create flea-market`
 - Add both as Worker secrets: `wrangler secret put TURSO_DATABASE_URL`, `wrangler secret put TURSO_AUTH_TOKEN`
-- Add the same values to `.dev.vars` (gitignored) for local development
-- Install `@libsql/client` and `drizzle-orm`; `drizzle-kit` and `tsx` as dev dependencies (`tsx` runs the seed script)
+- Add the same values to `.dev.vars` (gitignored) for local development. A committed `.dev.vars.example` documents the variable names. Re-run `pnpm cf-typegen` after writing `.dev.vars` so `worker-configuration.d.ts` picks up `TURSO_*` on the `Env` interface
+- Install `@libsql/client` and `drizzle-orm`; `drizzle-kit` as a dev dependency. `tsx` is intentionally **not** installed - Node 22+ runs `.ts` files directly via `--experimental-strip-types` (default on Node 23+), which covers our seed/check scripts; `drizzle-kit` ships its own loader for `drizzle.config.ts`
 - Define the schema in `src/db/schema.ts`:
   - `items` table with all columns from ARCHITECTURE.md (note `photos` is `[{key, alt?}]`, not bare strings)
   - `item_translations` table with composite primary key on (item_id, language)
   - CHECK constraint on price columns
-- Configure `drizzle.config.ts` to point at the Turso URL + auth token (read from `.dev.vars` for local invocations)
+- Configure `drizzle.config.ts` to point at the Turso URL + auth token. Load `.dev.vars` via Node's native `process.loadEnvFile('.dev.vars')` so no extra dotenv dep is needed
 - Apply the schema using **`drizzle-kit push`** - for this project's scale, push directly to Turso each schema change rather than generating versioned migration files. Versioned migrations are overkill for a single-admin, single-deployment app. If the project ever fans out to multiple instances (Jakarta, Singapore), revisit and switch to `generate` + a runtime migrator.
-- Create a seed script `scripts/seed.ts` that inserts 2-3 sample items with English and Indonesian translations. Run via `pnpm tsx scripts/seed.ts`.
-- Add scripts to `package.json`: `db:push` (`drizzle-kit push`), `db:studio` (`drizzle-kit studio`), `db:seed` (`tsx scripts/seed.ts`).
+- Create a seed script `scripts/seed.ts` that inserts 3 sample items with English and Indonesian translations (with one item intentionally en-only to exercise the language-fallback path)
+- Create a read-back verification script `scripts/db-check.ts` that selects from `items` and `item_translations` and prints a summary
+- Add scripts to `package.json`: `db:push` (`drizzle-kit push`), `db:studio` (`drizzle-kit studio`), `db:seed` (`node --no-warnings=ExperimentalWarning scripts/seed.ts`), `db:check` (same shape, for db-check.ts)
 - Build the DB client in `src/db/client.ts`:
-  - Inside server-side code, read bindings via `import { env } from "cloudflare:workers"` - this is the current TanStack-Start-on-Workers pattern, not `getEvent()` or `getRequestEvent()`.
-  - The client uses `@libsql/client/web` with `url: env.TURSO_DATABASE_URL`, `authToken: env.TURSO_AUTH_TOKEN`.
-  - Construct the client lazily per request rather than at module top-level. Server functions run inside a request context where `env` is available; module-level access during cold start can race with binding setup.
+  - Inside server-side code, read bindings via `import { env } from "cloudflare:workers"` - this is the current TanStack-Start-on-Workers pattern, not `getEvent()` or `getRequestEvent()`. Confirmed verbatim against TanStack's `start-basic-cloudflare` example.
+  - Use the bare `@libsql/client` import (Drizzle's `drizzle-orm/libsql` adapter also auto-detects); the older `@libsql/client/web` subpath is no longer the documented entry. Drizzle 0.45+ accepts an inline `drizzle({ connection: { url, authToken } })` form that constructs the libsql client internally
+  - Construct the client lazily per request (export a `getDb()` function) rather than at module top-level. Server functions run inside a request context where `env` is available; module-level access during cold start can race with binding setup
 
 Verify:
 
 - `turso db shell flea-market` and `SELECT * FROM items` returns the seed rows
+- `pnpm db:check` lists the seeded items + translations from Node
 - Drizzle Studio (`pnpm db:studio`) can read the rows (works against remote Turso via the `authToken` in `drizzle.config.ts`)
-- A small TanStack `createServerFn` that selects from `items` returns data when called from a test route
 
 Pitfalls:
 
-- Importing from `@libsql/client` (default Node entry) instead of `@libsql/client/web` fails in the Workers runtime
-- Forgetting to set both `.dev.vars` and `wrangler secret` means local and prod will diverge silently
+- The `--location` flag on `turso db create` has been replaced by `--group`. Groups carry the location, so location is set when the group is created (or implied by the signup region for the default group)
+- Forgetting to set both `.dev.vars` and `wrangler secret` means local and prod will diverge silently; `wrangler cf-typegen` also misses `TURSO_*` if `.dev.vars` is empty when it runs, producing confusing typecheck errors on `env.TURSO_DATABASE_URL`
 - Routes prerendered at build time cannot read `env` from `cloudflare:workers`. For data-driven routes, ensure they render at request time (not prerendered)
+- `@tursodatabase/serverless` is the newer Turso-recommended driver for edge runtimes (zero native deps, future concurrent writes), but Drizzle's documented Turso path is still `@libsql/client`. Stick with `@libsql/client` until Drizzle officially documents the serverless variant
 
 ## Step 5: R2, photo upload, image transforms
 
