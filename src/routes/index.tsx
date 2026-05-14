@@ -9,6 +9,7 @@ import type { DetailItem } from "@/components/detail-content.tsx";
 import type { ItemStatus } from "@/db/schema.ts";
 
 import { DetailContent, StatusBanner } from "@/components/detail-content.tsx";
+import { PricePill } from "@/components/price-pill.tsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -26,9 +27,7 @@ import { getDb } from "@/db/client.ts";
 import { ITEM_STATUSES, itemTranslations, items } from "@/db/schema.ts";
 import { optimizedImageUrl } from "@/lib/images.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
-import { formatPrice } from "@/lib/money.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
-import { cn } from "@/lib/utils.ts";
 
 // Optional + catch(undefined) on every field is intentional: TanStack Router runs
 // validateSearch on outbound navigation as well as inbound, so any `.catch("all")`
@@ -338,21 +337,11 @@ function Home() {
                       </div>
                     )}
                     <StatusBanner status={item.status} />
-                    {/* Mercari-style price overlay at bottom-left of the photo. Tinted
-                        with backdrop-blur for readability over busy photos. Free items
-                        get a green pill so they pop against the rest of the catalog. */}
-                    <span
-                      className={cn(
-                        "absolute bottom-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm sm:bottom-3 sm:left-3 sm:text-sm",
-                        item.priceAmount === null || item.priceCurrency === null
-                          ? "bg-green-700 text-white"
-                          : "bg-black/50 text-white",
-                      )}
-                    >
-                      {item.priceAmount === null || item.priceCurrency === null
-                        ? "FREE"
-                        : formatPrice(item.priceAmount, item.priceCurrency)}
-                    </span>
+                    <PricePill
+                      amount={item.priceAmount}
+                      currency={item.priceCurrency}
+                      size="card"
+                    />
                   </div>
                 </Link>
                 {/* Title: plain Link to the standalone /$slug/ page. No onClick

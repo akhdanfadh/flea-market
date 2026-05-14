@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { CarouselApi } from "@/components/ui/carousel";
 import type { Currency, ItemPhoto, ItemStatus } from "@/db/schema.ts";
 
+import { PricePill } from "@/components/price-pill.tsx";
 import {
   Carousel,
   CarouselContent,
@@ -11,7 +12,6 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { optimizedImageUrl } from "@/lib/images.ts";
-import { formatPrice } from "@/lib/money.ts";
 import { cn } from "@/lib/utils.ts";
 
 // Detail page and modal overlay both render this. Pure presentation; takes the data it needs
@@ -88,7 +88,7 @@ export function DetailContent({
         className={cn(
           "relative mx-auto w-full sm:max-w-md lg:mx-0 lg:max-w-none",
           // Page top-aligns the photo with the title so the layout reads like a
-          // standard product page. Modal centers it vertically — the modal's frame
+          // standard product page. Modal centers it vertically - the modal's frame
           // hugs the content, so a tall info column next to a short image looks
           // unbalanced unless the image is centered in the row.
           variant === "page" && "lg:self-start",
@@ -131,6 +131,7 @@ export function DetailContent({
           </div>
         )}
         <StatusBanner status={item.status} />
+        <PricePill amount={item.priceAmount} currency={item.priceCurrency} size="detail" />
       </div>
 
       <div
@@ -148,11 +149,6 @@ export function DetailContent({
         )}
       >
         <h1 className="text-2xl font-semibold sm:text-3xl">{translation.title}</h1>
-        <p className="text-xl font-medium">
-          {item.priceAmount === null || item.priceCurrency === null
-            ? "Free"
-            : formatPrice(item.priceAmount, item.priceCurrency)}
-        </p>
         {translation.description ? (
           // min-h-0 is required for flex-1 + overflow-y-auto to actually clip;
           // without it the flex item refuses to shrink below its content height
