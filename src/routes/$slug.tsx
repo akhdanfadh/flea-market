@@ -10,6 +10,7 @@ import { getDb } from "@/db/client.ts";
 import { itemTranslations, items } from "@/db/schema.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
+import { cn } from "@/lib/utils.ts";
 
 type DetailPayload = {
   item: DetailItem;
@@ -63,12 +64,24 @@ export const Route = createFileRoute("/$slug")({
   pendingMinMs: 300,
 });
 
+// At lg: the wrapper consumes exactly the viewport row between SiteHeader and
+// SiteFooter (both ~3.5rem tall under their p-4 padding) and hides its overflow,
+// so the page itself doesn't scroll - only the description inside DetailContent
+// scrolls. 7rem covers header + footer with a small visual margin; tune if either
+// component's padding/typography changes.
+const PAGE_FRAME_LG = "lg:h-[calc(100dvh-7rem)] lg:overflow-hidden";
+
 function Detail() {
   const { item, translation } = Route.useLoaderData();
 
   return (
-    <div className="mx-auto max-w-4xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8">
-      <DetailContent item={item} translation={translation} />
+    <div
+      className={cn(
+        "mx-auto max-w-6xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8",
+        PAGE_FRAME_LG,
+      )}
+    >
+      <DetailContent item={item} translation={translation} variant="page" />
     </div>
   );
 }
@@ -78,19 +91,26 @@ function Detail() {
 // route config keep it hidden on fast loads and stable on near-instant ones.
 function DetailSkeleton() {
   return (
-    <div className="mx-auto max-w-4xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8">
-      <Skeleton className="aspect-square w-full rounded-lg sm:max-w-md" />
+    <div
+      className={cn(
+        "mx-auto max-w-6xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8",
+        PAGE_FRAME_LG,
+      )}
+    >
+      <div className="lg:grid lg:h-full lg:grid-cols-2 lg:gap-8">
+        <Skeleton className="mx-auto aspect-square w-full rounded-lg sm:max-w-md lg:mx-0 lg:max-w-none lg:self-center" />
 
-      <div className="mt-6 space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Skeleton className="h-8 w-2/3" />
-          <Skeleton className="h-5 w-20 rounded-full" />
-        </div>
-        <Skeleton className="h-6 w-24" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-3/4" />
+        <div className="mt-6 flex flex-col gap-3 lg:mt-0 lg:h-full lg:min-h-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-8 w-2/3" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+          </div>
+          <Skeleton className="h-6 w-24" />
+          <div className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
         </div>
       </div>
     </div>

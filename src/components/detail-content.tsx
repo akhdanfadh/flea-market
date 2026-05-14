@@ -50,12 +50,22 @@ export type DetailTranslation = {
 const NAV_BUTTON_CLASS =
   "size-8 border-0 bg-black/40 text-white shadow-none backdrop-blur-sm hover:bg-black/60 hover:text-white dark:bg-black/40 dark:hover:bg-black/60 active:not-aria-[haspopup]:-translate-y-1/2!";
 
+// Two surfaces consume this component, both bounded-height at lg: so the page
+// itself never scrolls (modal is capped by its frame, page is capped to viewport
+// minus header/footer in its wrapping route). Photo + title + price stay anchored;
+// only the description scrolls. The variant differs only in how the info column's
+// vertical extent is bounded (modal: a vh cap; page: fills the wrapper).
+// Below lg: both variants render identically (stacked vertical flow, no internal scroll).
+export type DetailVariant = "page" | "modal";
+
 export function DetailContent({
   item,
   translation,
+  variant,
 }: {
   item: DetailItem;
   translation: DetailTranslation;
+  variant: DetailVariant;
 }) {
   const hasMultiplePhotos = item.photos.length > 1;
   const [api, setApi] = useState<CarouselApi>();
@@ -73,8 +83,18 @@ export function DetailContent({
     };
   }, [api]);
   return (
-    <div>
-      <div className="relative mx-auto w-full sm:max-w-md">
+    <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:h-full">
+      <div
+        className={cn(
+          "relative mx-auto w-full sm:max-w-md lg:mx-0 lg:max-w-none",
+          // Page top-aligns the photo with the title so the layout reads like a
+          // standard product page. Modal centers it vertically — the modal's frame
+          // hugs the content, so a tall info column next to a short image looks
+          // unbalanced unless the image is centered in the row.
+          variant === "page" && "lg:self-start",
+          variant === "modal" && "lg:self-center",
+        )}
+      >
         {item.photos.length > 0 ? (
           <Carousel
             className="w-full"
@@ -113,7 +133,20 @@ export function DetailContent({
         <StatusBanner status={item.status} />
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div
+        className={cn(
+          // flex-col + gap-3 is the same vertical rhythm as the old space-y-3 but
+          // also gives us flex-1 on the description below for the lg: scroll model.
+          "mt-6 flex flex-col gap-3 lg:mt-0 lg:min-h-0",
+          // Modal caps the column a few vh under DialogContent's lg:max-h-[75vh]
+          // so the description scroll lives inside the modal frame. Short content
+          // stays shorter than the cap and the modal shrinks to fit.
+          variant === "modal" && "lg:max-h-[68vh]",
+          // Page fills the wrapper (which is itself bounded to viewport minus
+          // header/footer in $slug.tsx), making the description the only scroll.
+          variant === "page" && "lg:h-full",
+        )}
+      >
         <h1 className="text-2xl font-semibold sm:text-3xl">{translation.title}</h1>
         <p className="text-xl font-medium">
           {item.priceAmount === null || item.priceCurrency === null
@@ -121,7 +154,10 @@ export function DetailContent({
             : formatPrice(item.priceAmount, item.priceCurrency)}
         </p>
         {translation.description ? (
-          <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground">
+          // min-h-0 is required for flex-1 + overflow-y-auto to actually clip;
+          // without it the flex item refuses to shrink below its content height
+          // and overflow never kicks in.
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
             {translation.description}
           </p>
         ) : null}

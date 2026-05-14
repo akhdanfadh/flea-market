@@ -380,7 +380,7 @@ function Home() {
             stays pinned to the dialog corner instead of scrolling away with the content. */}
         <DialogContent
           showCloseButton={false}
-          className="max-h-[90vh] gap-0 overflow-hidden p-0 sm:max-w-md"
+          className="max-h-[90vh] gap-0 overflow-hidden p-0 sm:max-w-md lg:max-h-[75vh] lg:max-w-3xl"
         >
           {/* Semi-transparent corner close button - pinned to the DialogContent frame,
               so it stays put while the inner content scrolls underneath. */}
@@ -393,7 +393,11 @@ function Home() {
             <XIcon className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </button>
-          <div className="max-h-[90vh] overflow-y-auto p-4">
+          {/* Below lg: this wrapper scrolls the whole stacked content. At lg: it lets
+              the inner grid set its own height (modal hugs its content up to 90vh) and
+              hands scroll responsibility to the info column, which carries its own
+              max-h so the modal never exceeds DialogContent's frame. */}
+          <div className="max-h-[90vh] overflow-y-auto p-4 lg:overflow-visible">
             {modalRow ? (
               <>
                 <DialogTitle className="sr-only">{modalRow.translation.title}</DialogTitle>
@@ -406,6 +410,7 @@ function Home() {
                   key={modalRow.item.slug}
                   item={modalRow.item}
                   translation={modalRow.translation}
+                  variant="modal"
                 />
               </>
             ) : null}
