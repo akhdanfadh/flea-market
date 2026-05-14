@@ -97,7 +97,7 @@ Modifier-click / right-click on a card falls through to the Link's real `href="/
 | `slug`           | text unique      | Format: `YYYYMMDD-{kebab-case-title}`. Indexed                                                                                   |
 | `price_amount`   | integer nullable | In minor units (yen and rupiah have 0 decimals, USD has 2). Null means free                                                      |
 | `price_currency` | text nullable    | ISO 4217: `JPY` / `IDR` / `USD`. Null when free                                                                                  |
-| `status`         | text             | `available` / `reserved` / `sold`                                                                                                |
+| `status`         | text             | `draft` / `available` / `reserved` / `sold`. Drafts are admin-only - see below                                                   |
 | `photos`         | json             | Ordered array of `{ key: string, alt?: string }` objects. `key` is the R2 object key; `alt` is an optional accessibility caption |
 | `created_at`     | timestamp        |                                                                                                                                  |
 | `updated_at`     | timestamp        |                                                                                                                                  |
@@ -118,6 +118,12 @@ Constraints:
 | PRIMARY KEY   | `(item_id, language)`                   | Prevents duplicate-language rows for same item |
 
 Application-level rule: every item must have at least one `en` translation before save. Enforced in the create/edit logic, not in the DB schema, since SQLite triggers for this kind of constraint are clunky.
+
+**Draft status**
+
+`draft` is the admin's working state - items are created in `draft` from the new-item page, then promoted to `available` via an explicit Publish action once metadata and photos are in place. Public loaders filter `ne(items.status, "draft")` so visitors never see drafts on the list page, and a draft slug visited directly returns `notFound()`. The schema default for `status` stays `available` so any non-form insert path (seed script, ad-hoc) lands published; the new-item form sets `draft` explicitly.
+
+The other three statuses (`available`, `reserved`, `sold`) are all public-visible. Cart and contact flow excludes `sold` from purchase-able items; `reserved` is informational. See `#Cart and contact flow`.
 
 ## Money handling
 

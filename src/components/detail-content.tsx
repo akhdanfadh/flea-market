@@ -12,6 +12,7 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { optimizedImageUrl } from "@/lib/images.ts";
+import { STATUS_LABEL } from "@/lib/statuses.ts";
 import { cn } from "@/lib/utils.ts";
 
 // Detail page and modal overlay both render this. Pure presentation; takes the data it needs
@@ -167,17 +168,32 @@ export function DetailContent({
 // so the photo's center stays clear - a "No photo" placeholder underneath stays
 // readable, and on real photos the focal subject is usually in the middle.
 // pointer-events-none so swipes through the carousel still register on the image.
+//
+// Exhaustive Record<ItemStatus, …> rather than an if/else chain so adding a new
+// status to the schema enum fails to typecheck here until it's mapped - prevents
+// the silent-fallthrough class of bug (a new status rendering as another's sash).
+// `draft` returns null: the public site never renders drafts (loaders filter
+// them), and admin preview of a draft is informational enough without a sash.
+// Labels come from the shared STATUS_LABEL so the same string lives in exactly
+// one place; this config is purely presentation (bg color, render-or-not).
+const STATUS_BANNER: Record<ItemStatus, { bg: string } | null> = {
+  draft: null,
+  available: null,
+  reserved: { bg: "bg-yellow-500" },
+  sold: { bg: "bg-red-600" },
+};
+
 export function StatusBanner({ status }: { status: ItemStatus }) {
-  if (status === "available") return null;
-  const isSold = status === "sold";
+  const config = STATUS_BANNER[status];
+  if (!config) return null;
   return (
     <div
       className={cn(
         "pointer-events-none absolute inset-x-0 top-3 py-1.5 text-center text-sm font-bold uppercase tracking-widest text-white shadow-md sm:top-4 sm:py-2 sm:text-base",
-        isSold ? "bg-red-600" : "bg-yellow-500",
+        config.bg,
       )}
     >
-      {isSold ? "Sold" : "Reserved"}
+      {STATUS_LABEL[status]}
     </div>
   );
 }

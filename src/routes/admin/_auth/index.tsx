@@ -57,6 +57,7 @@ import { getDb } from "@/db/client.ts";
 import { ITEM_STATUSES, LANGUAGES, itemTranslations, items } from "@/db/schema.ts";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 import { formatPrice } from "@/lib/money.ts";
+import { STATUS_LABEL } from "@/lib/statuses.ts";
 import { cn } from "@/lib/utils.ts";
 
 type AdminItemRow = {
@@ -169,20 +170,21 @@ const adminSearchSchema = z.object({
 });
 type StatusFilter = "all" | ItemStatus;
 
-// Single source of truth for human-readable labels. The dropdown menu, the
-// filter chips, the trigger button, and the success toast description all
-// pull from here so adding a new status (e.g. "draft") means editing one
-// place. STATUS_OPTIONS is derived below.
-const STATUS_LABEL: Record<StatusFilter, string> = {
+// Admin-side label map: extends the canonical STATUS_LABEL (Record<ItemStatus,
+// string> from @/lib/statuses) with the "all" sentinel used by filter chips.
+// Per-status strings come from the source of truth so they don't drift
+// between public and admin; this just adds the admin-only "All" entry. Used
+// only at the two StatusFilter call sites (the filter-chip derivation and
+// the empty-state label); ItemStatus-typed call sites use the imported
+// STATUS_LABEL directly.
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
   all: "All",
-  available: "Available",
-  reserved: "Reserved",
-  sold: "Sold",
+  ...STATUS_LABEL,
 };
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = (
   ["all", ...ITEM_STATUSES] as const
-).map((value) => ({ value, label: STATUS_LABEL[value] }));
+).map((value) => ({ value, label: STATUS_FILTER_LABEL[value] }));
 
 export const Route = createFileRoute("/admin/_auth/")({
   validateSearch: adminSearchSchema,
@@ -262,7 +264,7 @@ function AdminIndex() {
           <EmptyHeader>
             <EmptyTitle>No matches</EmptyTitle>
             <EmptyDescription>
-              No items have status &quot;{STATUS_LABEL[statusFilter]}&quot;.{" "}
+              No items have status &quot;{STATUS_FILTER_LABEL[statusFilter]}&quot;.{" "}
               <button
                 type="button"
                 onClick={() => setStatus("all")}
@@ -388,14 +390,35 @@ function ItemRow({ row }: { row: AdminItemRow }) {
     <TableRow>
       <TableCell>
         <div className="max-w-xs">
-          <Link
-            to="/$slug/"
-            params={{ slug: row.slug }}
-            className="block truncate font-medium hover:underline"
-            title={row.title}
-          >
-            {row.title}
-          </Link>
+          {/* Drafts can't be viewed by visitors (loaders filter them and 404
+              on direct nav), so a draft row's name links to the admin edit
+              page instead of the public detail. Published rows keep the
+              "preview as visitor" affordance. Read displayStatus, not
+              row.status, to stay consistent with the optimistic dropdown
+              trigger - otherwise demoting a published item to draft would
+              leave the name link pointing at /$slug/ for the round-trip
+              window and a click in that window 404s. Two parallel Link
+              branches rather than a union `to=` because TanStack Router's
+              typed params depend on the literal path. */}
+          {displayStatus === "draft" ? (
+            <Link
+              to="/admin/$slug/edit/"
+              params={{ slug: row.slug }}
+              className="block truncate font-medium hover:underline"
+              title={row.title}
+            >
+              {row.title}
+            </Link>
+          ) : (
+            <Link
+              to="/$slug/"
+              params={{ slug: row.slug }}
+              className="block truncate font-medium hover:underline"
+              title={row.title}
+            >
+              {row.title}
+            </Link>
+          )}
           <div className="block truncate font-mono text-xs text-muted-foreground" title={row.slug}>
             {row.slug}
           </div>
@@ -542,9 +565,15 @@ function formatUpdatedAt(ms: number): string {
 
 // Status color lives on the trigger Button itself, not a nested pill. Each
 // entry overrides the outline variant's `dark:bg-input/30` rule (CLAUDE.md
-// §4 rule 9 - a plain `bg-*` loses the cascade against the dark: variant
+// #4 rule 9 - a plain `bg-*` loses the cascade against the dark: variant
 // the base classes carry).
 const STATUS_TRIGGER: Record<ItemStatus, string> = {
+  // Slate/zinc for draft: cool gray reads as "not yet published", distinct
+  // from the muted-foreground gray used elsewhere in the admin chrome, and
+  // visibly different from the green/amber/rose signal colors of the
+  // published states.
+  draft:
+    "border-zinc-500/30 bg-zinc-500/15 text-zinc-300 hover:bg-zinc-500/25 hover:text-zinc-200 dark:bg-zinc-500/15 dark:hover:bg-zinc-500/25",
   available:
     "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25",
   reserved:

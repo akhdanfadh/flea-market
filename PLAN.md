@@ -527,7 +527,14 @@ Commits in the follow-on series:
    on `photos.length >= 1`). Inline server fns: `getItemForEdit`,
    `updateItem`, `removeItemPhoto`, `setItemPhotoOrder`,
    `setItemPhotoAlt`, `publishItem`, `unpublishItem`. Admin index gets
-   draft chip (slate/zinc color) + draft option in row dropdown.
+   draft chip (slate/zinc color) + draft option in row dropdown. The row
+   status dropdown also needs the publish gate: today's `setItemStatus`
+   accepts any `ItemStatus`, so a draft -> available transition via the
+   dropdown would bypass the `photos.length >= 1` check that
+   `publishItem` enforces. Two ways to close that gap in commit 5: route
+   draft -> available through `publishItem` from the dropdown itself, or
+   disable the "Available" menu item when `photos.length === 0` for draft
+   rows. Either is fine; the gate just has to live in both call paths.
    `DEFAULT_CURRENCY` finally wired into `wrangler.jsonc` + env types
    (the edit form's price section consumes it).
 

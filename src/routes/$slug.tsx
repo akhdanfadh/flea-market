@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { DetailItem } from "@/components/detail-content.tsx";
 
@@ -23,9 +23,15 @@ const loadDetail = createServerFn({ method: "GET" })
     const language = getLanguage();
     const db = getDb();
 
-    const found = await db.select().from(items).where(eq(items.slug, slug)).limit(1);
+    const found = await db
+      .select()
+      .from(items)
+      .where(and(eq(items.slug, slug), ne(items.status, "draft")))
+      .limit(1);
     const item = found[0];
     if (!item) {
+      // Drafts also land here - the loader treats them as "not found" so
+      // visitors with a stale share link can't see a half-finished item.
       throw notFound();
     }
 

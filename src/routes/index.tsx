@@ -1,12 +1,12 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { desc, inArray } from "drizzle-orm";
+import { desc, inArray, ne } from "drizzle-orm";
 import { SearchIcon, SearchXIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
 
 import type { DetailItem } from "@/components/detail-content.tsx";
-import type { ItemStatus } from "@/db/schema.ts";
+import type { PublicItemStatus } from "@/lib/statuses.ts";
 
 import { DetailContent, StatusBanner } from "@/components/detail-content.tsx";
 import { PricePill } from "@/components/price-pill.tsx";
@@ -24,10 +24,11 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDb } from "@/db/client.ts";
-import { ITEM_STATUSES, itemTranslations, items } from "@/db/schema.ts";
+import { itemTranslations, items } from "@/db/schema.ts";
 import { optimizedImageUrl } from "@/lib/images.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
+import { PUBLIC_STATUSES, STATUS_LABEL } from "@/lib/statuses.ts";
 
 // Optional + catch(undefined) on every field is intentional: TanStack Router runs
 // validateSearch on outbound navigation as well as inbound, so any `.catch("all")`
@@ -38,7 +39,10 @@ const PRICE_FILTERS = ["free", "paid"] as const;
 type PriceValue = (typeof PRICE_FILTERS)[number];
 
 const searchSchema = z.object({
-  status: z.enum(ITEM_STATUSES).optional().catch(undefined),
+  // PUBLIC_STATUSES, not ITEM_STATUSES - `draft` is admin-only and must not
+  // be acceptable as a public URL filter value. SQL loader filters drafts
+  // anyway, but constraining the schema keeps the URL contract honest.
+  status: z.enum(PUBLIC_STATUSES).optional().catch(undefined),
   price: z.enum(PRICE_FILTERS).optional().catch(undefined),
   q: z.string().optional().catch(undefined),
   // `item` opens a modal over the list with that slug's detail. The standalone
@@ -47,7 +51,7 @@ const searchSchema = z.object({
   item: z.string().optional().catch(undefined),
 });
 type Search = z.infer<typeof searchSchema>;
-type StatusFilter = "all" | ItemStatus;
+type StatusFilter = "all" | PublicItemStatus;
 type PriceFilter = "all" | PriceValue;
 
 type Row = {
@@ -59,7 +63,11 @@ const loadList = createServerFn({ method: "GET" }).handler(async (): Promise<{ r
   const language = getLanguage();
   const db = getDb();
 
-  const all = await db.select().from(items).orderBy(desc(items.createdAt));
+  const all = await db
+    .select()
+    .from(items)
+    .where(ne(items.status, "draft"))
+    .orderBy(desc(items.createdAt));
   const ids = all.map((i) => i.id);
   const trs =
     ids.length === 0
@@ -105,9 +113,7 @@ export const Route = createFileRoute("/")({
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "All" },
-  { value: "available", label: "Available" },
-  { value: "reserved", label: "Reserved" },
-  { value: "sold", label: "Sold" },
+  ...PUBLIC_STATUSES.map((value) => ({ value, label: STATUS_LABEL[value] })),
 ];
 
 const PRICE_OPTIONS: Array<{ value: PriceFilter; label: string }> = [
