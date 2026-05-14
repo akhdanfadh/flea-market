@@ -121,7 +121,7 @@ export function DetailContent({
             : formatPrice(item.priceAmount, item.priceCurrency)}
         </p>
         {translation.description ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground">
             {translation.description}
           </p>
         ) : null}

@@ -3,6 +3,8 @@ import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-r
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
 
+import { SiteFooter } from "@/components/site-footer.tsx";
+import { SiteHeader } from "@/components/site-header.tsx";
 import { getLanguage } from "@/lib/lang.server.ts";
 import appCss from "@/styles.css?url";
 
@@ -22,14 +24,16 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Akhdan's Flea Market",
       },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon/favicon.svg" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon/favicon.ico" },
+      { rel: "icon", type: "image/png", sizes: "96x96", href: "/favicon/favicon-96x96.png" },
+      { rel: "apple-touch-icon", href: "/favicon/apple-touch-icon.png" },
+      { rel: "manifest", href: "/favicon/site.webmanifest" },
     ],
   }),
   component: () => (
@@ -59,8 +63,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
-        {children}
+      <body className="flex min-h-dvh flex-col">
+        <SiteHeader language={language} />
+        <main className="flex-1">{children}</main>
+        <SiteFooter />
         <TanStackDevtools
           config={{
             position: "bottom-right",

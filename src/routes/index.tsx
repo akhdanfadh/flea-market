@@ -6,10 +6,9 @@ import { useEffect, useRef } from "react";
 import { z } from "zod";
 
 import type { DetailItem } from "@/components/detail-content.tsx";
-import type { ItemStatus, Language } from "@/db/schema.ts";
+import type { ItemStatus } from "@/db/schema.ts";
 
 import { DetailContent, StatusBanner } from "@/components/detail-content.tsx";
-import { LanguagePill } from "@/components/language-pill.tsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -57,44 +56,42 @@ type Row = {
   translation: { title: string; description: string };
 };
 
-const loadList = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ language: Language; rows: Row[] }> => {
-    const language = getLanguage();
-    const db = getDb();
+const loadList = createServerFn({ method: "GET" }).handler(async (): Promise<{ rows: Row[] }> => {
+  const language = getLanguage();
+  const db = getDb();
 
-    const all = await db.select().from(items).orderBy(desc(items.createdAt));
-    const ids = all.map((i) => i.id);
-    const trs =
-      ids.length === 0
-        ? []
-        : await db.select().from(itemTranslations).where(inArray(itemTranslations.itemId, ids));
+  const all = await db.select().from(items).orderBy(desc(items.createdAt));
+  const ids = all.map((i) => i.id);
+  const trs =
+    ids.length === 0
+      ? []
+      : await db.select().from(itemTranslations).where(inArray(itemTranslations.itemId, ids));
 
-    type Trans = (typeof trs)[number];
-    const byItem = new Map<string, { en?: Trans; pref?: Trans }>();
-    for (const t of trs) {
-      let entry = byItem.get(t.itemId);
-      if (!entry) {
-        entry = {};
-        byItem.set(t.itemId, entry);
-      }
-      if (t.language === "en") entry.en = t;
-      if (t.language === language) entry.pref = t;
+  type Trans = (typeof trs)[number];
+  const byItem = new Map<string, { en?: Trans; pref?: Trans }>();
+  for (const t of trs) {
+    let entry = byItem.get(t.itemId);
+    if (!entry) {
+      entry = {};
+      byItem.set(t.itemId, entry);
     }
+    if (t.language === "en") entry.en = t;
+    if (t.language === language) entry.pref = t;
+  }
 
-    const rows: Row[] = all.map((item) => {
-      const entry = byItem.get(item.id) ?? {};
-      const t = entry.pref ?? entry.en;
-      return {
-        item: serializeItem(item),
-        translation: t
-          ? { title: t.title, description: t.description }
-          : { title: item.slug, description: "" },
-      };
-    });
+  const rows: Row[] = all.map((item) => {
+    const entry = byItem.get(item.id) ?? {};
+    const t = entry.pref ?? entry.en;
+    return {
+      item: serializeItem(item),
+      translation: t
+        ? { title: t.title, description: t.description }
+        : { title: item.slug, description: "" },
+    };
+  });
 
-    return { language, rows };
-  },
-);
+  return { rows };
+});
 
 export const Route = createFileRoute("/")({
   validateSearch: searchSchema,
@@ -121,7 +118,7 @@ const PRICE_OPTIONS: Array<{ value: PriceFilter; label: string }> = [
 ];
 
 function Home() {
-  const { language, rows } = Route.useLoaderData();
+  const { rows } = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -171,6 +168,17 @@ function Home() {
     if (activeModalRow) lastModalRowRef.current = activeModalRow;
   }, [activeModalRow]);
   const modalRow = activeModalRow ?? lastModalRowRef.current;
+  // The URL mask makes the bar read /$slug/ but the matched route is still /, so
+  // /$slug's head() never fires for the modal. Mirror it client-side here; cleanup
+  // restores the listing title on close. Pure client nav, so no SSR concern.
+  useEffect(() => {
+    if (!activeModalRow) return;
+    const prev = document.title;
+    document.title = `${activeModalRow.translation.title} | Akhdan's Flea Market`;
+    return () => {
+      document.title = prev;
+    };
+  }, [activeModalRow]);
   // The route mask makes the URL bar show "/$slug/" while the router is actually still
   // matching "/" with ?item=slug - the modal-over-list pattern Instagram/Pinterest use.
   // unmaskOnReload: a refresh at /some-slug/ skips the mask and renders the standalone
@@ -226,16 +234,7 @@ function Home() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 md:p-8">
-      <header className="flex items-center justify-between gap-4 pb-6">
-        <h1 className="text-2xl font-semibold sm:text-3xl">
-          <Link to="/" search={() => ({})} className="hover:opacity-80">
-            Flea market
-          </Link>
-        </h1>
-        <LanguagePill current={language} />
-      </header>
-
+    <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8">
       <div className="space-y-3 pb-6">
         <div className="flex flex-wrap items-center gap-3">
           <InputGroup className="max-w-md flex-1">
@@ -244,7 +243,7 @@ function Home() {
             </InputGroupAddon>
             <InputGroupInput
               type="search"
-              placeholder="Search title or description"
+              placeholder="Search item's name or description..."
               value={qInput}
               onChange={(e) => setSearch({ q: e.target.value })}
             />
@@ -454,12 +453,7 @@ function FilterRow<T extends string>({
 // main beneficiary is the detail -> back-to-list transition on slow connections.
 function ListSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 md:p-8">
-      <div className="flex items-center justify-between gap-4 pb-6">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-7 w-20 rounded-full" />
-      </div>
-
+    <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8">
       <div className="space-y-3 pb-6">
         <Skeleton className="h-10 w-full max-w-md" />
         <div className="flex flex-wrap gap-x-6 gap-y-1">
