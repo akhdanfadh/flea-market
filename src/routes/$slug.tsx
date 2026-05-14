@@ -1,14 +1,17 @@
-import { DetailContent, type DetailItem } from "#/components/detail-content.tsx";
-import { LanguagePill } from "#/components/language-pill.tsx";
-import { getDb } from "#/db/client.ts";
-import { type Language, itemTranslations, items } from "#/db/schema.ts";
-import { getLanguage } from "#/lib/lang.server.ts";
-import { serializeItem } from "#/lib/serialize-item.ts";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { DetailItem } from "@/components/detail-content.tsx";
+import type { Language } from "@/db/schema.ts";
+
+import { DetailContent } from "@/components/detail-content.tsx";
+import { LanguagePill } from "@/components/language-pill.tsx";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getDb } from "@/db/client.ts";
+import { itemTranslations, items } from "@/db/schema.ts";
+import { getLanguage } from "@/lib/lang.server.ts";
+import { serializeItem } from "@/lib/serialize-item.ts";
 
 type DetailPayload = {
   language: Language;
@@ -63,7 +66,7 @@ export const Route = createFileRoute("/$slug")({
 function Detail() {
   const { language, item, translation } = Route.useLoaderData();
 
-  // Plain Link to "/" — no history.back() intercept. canGoBack() returns true even
+  // Plain Link to "/" - no history.back() intercept. canGoBack() returns true even
   // when the previous entry is cross-origin (visitor arrived from an external link),
   // and back() would walk them off-site. The modal in / can guard with a session ref
   // because its open/close share a component instance; this route mounts fresh on

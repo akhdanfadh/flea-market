@@ -1,5 +1,5 @@
-import type { DetailItem } from "#/components/detail-content.tsx";
-import type { Item } from "#/db/schema.ts";
+import type { DetailItem } from "@/components/detail-content.tsx";
+import type { Item } from "@/db/schema.ts";
 
 // Shared serializer for the wire shape of an item. Both the list loader and the
 // detail loader produce this so the modal (which renders DetailContent from the

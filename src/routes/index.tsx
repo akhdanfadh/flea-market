@@ -1,18 +1,3 @@
-import { DetailContent, type DetailItem, StatusBanner } from "#/components/detail-content.tsx";
-import { LanguagePill } from "#/components/language-pill.tsx";
-import { getDb } from "#/db/client.ts";
-import {
-  ITEM_STATUSES,
-  type ItemStatus,
-  type Language,
-  itemTranslations,
-  items,
-} from "#/db/schema.ts";
-import { optimizedImageUrl } from "#/lib/images.ts";
-import { getLanguage } from "#/lib/lang.server.ts";
-import { formatPrice } from "#/lib/money.ts";
-import { serializeItem } from "#/lib/serialize-item.ts";
-import { cn } from "#/lib/utils.ts";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { desc, inArray } from "drizzle-orm";
@@ -20,6 +5,11 @@ import { SearchIcon, SearchXIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
 
+import type { DetailItem } from "@/components/detail-content.tsx";
+import type { ItemStatus, Language } from "@/db/schema.ts";
+
+import { DetailContent, StatusBanner } from "@/components/detail-content.tsx";
+import { LanguagePill } from "@/components/language-pill.tsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -33,6 +23,13 @@ import {
 } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getDb } from "@/db/client.ts";
+import { ITEM_STATUSES, itemTranslations, items } from "@/db/schema.ts";
+import { optimizedImageUrl } from "@/lib/images.ts";
+import { getLanguage } from "@/lib/lang.server.ts";
+import { formatPrice } from "@/lib/money.ts";
+import { serializeItem } from "@/lib/serialize-item.ts";
+import { cn } from "@/lib/utils.ts";
 
 // Optional + catch(undefined) on every field is intentional: TanStack Router runs
 // validateSearch on outbound navigation as well as inbound, so any `.catch("all")`

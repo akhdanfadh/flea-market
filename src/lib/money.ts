@@ -1,4 +1,6 @@
-import { CURRENCIES, type Currency } from "#/db/schema.ts";
+import type { Currency } from "@/db/schema.ts";
+
+import { CURRENCIES } from "@/db/schema.ts";
 
 // Minor-unit exponent per ISO 4217 code in the supported set.
 // JPY and IDR have no fractional unit; USD uses 2 decimals.

@@ -1,7 +1,8 @@
-import { LANGUAGES, type Language } from "#/db/schema.ts";
+import type { Language } from "@/db/schema.ts";
 
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { LANGUAGES } from "@/db/schema.ts";
 
 export function LanguagePill({ current }: { current: Language }) {
   return (

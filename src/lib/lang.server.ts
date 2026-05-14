@@ -1,6 +1,9 @@
-import { LANGUAGES, type Language } from "#/db/schema.ts";
 import { getCookie, getRequestHeader } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
+
+import type { Language } from "@/db/schema.ts";
+
+import { LANGUAGES } from "@/db/schema.ts";
 
 function isLanguage(value: string | undefined): value is Language {
   return value !== undefined && (LANGUAGES as readonly string[]).includes(value);

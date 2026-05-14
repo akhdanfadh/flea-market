@@ -1,10 +1,10 @@
-import { getLanguage } from "#/lib/lang.server.ts";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
 
-import appCss from "../styles.css?url";
+import { getLanguage } from "@/lib/lang.server.ts";
+import appCss from "@/styles.css?url";
 
 const loadRootContext = createServerFn({ method: "GET" }).handler(() => ({
   language: getLanguage(),

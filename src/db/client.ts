@@ -1,6 +1,7 @@
-import * as schema from "#/db/schema.ts";
 import { env } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/libsql";
+
+import * as schema from "@/db/schema.ts";
 
 export function getDb() {
   return drizzle({

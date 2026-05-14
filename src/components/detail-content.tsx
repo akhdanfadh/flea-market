@@ -1,18 +1,18 @@
-import type { Currency, ItemPhoto, ItemStatus } from "#/db/schema.ts";
-
-import { optimizedImageUrl } from "#/lib/images.ts";
-import { formatPrice } from "#/lib/money.ts";
-import { cn } from "#/lib/utils.ts";
 import { useEffect, useState } from "react";
+
+import type { CarouselApi } from "@/components/ui/carousel";
+import type { Currency, ItemPhoto, ItemStatus } from "@/db/schema.ts";
 
 import {
   Carousel,
-  type CarouselApi,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { optimizedImageUrl } from "@/lib/images.ts";
+import { formatPrice } from "@/lib/money.ts";
+import { cn } from "@/lib/utils.ts";
 
 // Detail page and modal overlay both render this. Pure presentation; takes the data it needs
 // as props (no loader access here). The two callers handle chrome (page padding/Back link
@@ -39,7 +39,7 @@ export type DetailTranslation = {
 // The carousel button is vertically centered via -translate-y-1/2 (translate up by
 // half its height after anchoring at top-1/2). The base Button class adds
 // active:not-aria-[haspopup]:translate-y-px on press, which REPLACES --tw-translate-y
-// from -50% to 1px and breaks the centering — the button visibly drops ~16px (half
+// from -50% to 1px and breaks the centering - the button visibly drops ~16px (half
 // its 32px height). Override active with the same -translate-y-1/2 so press changes
 // nothing. !important guards against tailwind-merge missing the variant.
 const NAV_BUTTON_CLASS =
@@ -74,7 +74,7 @@ export function DetailContent({
           <Carousel
             className="w-full"
             // loop only matters when there's more than one slide. Embla's default
-            // duration (25) stays — lower values introduce spring overshoot that reads
+            // duration (25) stays - lower values introduce spring overshoot that reads
             // as bounce; not worth the marginal speed gain.
             opts={{ loop: hasMultiplePhotos }}
             setApi={setApi}
@@ -127,7 +127,7 @@ export function DetailContent({
 
 // Horizontal status sash near the top of a non-available item's photo. Returns null
 // for available so callers can render it unconditionally. Top-positioned (not center)
-// so the photo's center stays clear — a "No photo" placeholder underneath stays
+// so the photo's center stays clear - a "No photo" placeholder underneath stays
 // readable, and on real photos the focal subject is usually in the middle.
 // pointer-events-none so swipes through the carousel still register on the image.
 export function StatusBanner({ status }: { status: ItemStatus }) {

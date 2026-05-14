@@ -1,5 +1,6 @@
-import { LANGUAGES } from "#/db/schema.ts";
 import { createFileRoute } from "@tanstack/react-router";
+
+import { LANGUAGES } from "@/db/schema.ts";
 
 const SUPPORTED = new Set<string>(LANGUAGES);
 

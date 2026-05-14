@@ -1,4 +1,7 @@
 {
   "ignorePatterns": ["**/dist/**", "**/src/routeTree.gen.ts"],
-  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "react-perf", "import"]
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "react-perf", "import"],
+  "rules": {
+    "import/consistent-type-specifier-style": ["error", "prefer-top-level"]
+  }
 }

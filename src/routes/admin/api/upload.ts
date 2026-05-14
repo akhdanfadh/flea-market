@@ -1,6 +1,7 @@
-import { verifyBearer } from "#/lib/auth.ts";
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
+
+import { verifyBearer } from "@/lib/auth.ts";
 
 const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
