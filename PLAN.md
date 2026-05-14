@@ -360,7 +360,7 @@ Pitfalls:
 Foundation:
 
 - `COOKIE_SECRET` generated via `openssl rand -hex 32`, set in `.dev.vars` and as a Worker secret. `src/types/env.d.ts` augments `Cloudflare.Env` with the new key.
-- `src/lib/auth.ts` renamed to `src/lib/auth.server.ts` (AGENTS.md §4 rule 4: explicit `*.server.ts` for modules touching `env` / `node:crypto`). Extended with `ADMIN_SESSION_COOKIE` constant, `signCookie` / `verifyCookie` (WebCrypto HMAC-SHA256 + `node:crypto.timingSafeEqual` on hex-decoded MACs), `buildSessionCookieHeader` / `clearSessionCookieHeader` (30-day session with `Secure` gated on request protocol, mirroring `src/routes/lang/$lang.ts`), and `hasAdminSession(request, secret)` for symmetry with `verifyBearer`.
+- `src/lib/auth.ts` renamed to `src/lib/auth.server.ts` (AGENTS.md #4 rule 4: explicit `*.server.ts` for modules touching `env` / `node:crypto`). Extended with `ADMIN_SESSION_COOKIE` constant, `signCookie` / `verifyCookie` (WebCrypto HMAC-SHA256 + `node:crypto.timingSafeEqual` on hex-decoded MACs), `buildSessionCookieHeader` / `clearSessionCookieHeader` (30-day session with `Secure` gated on request protocol, mirroring `src/routes/lang/$lang.ts`), and `hasAdminSession(request, secret)` for symmetry with `verifyBearer`.
 
 Routes:
 
@@ -527,7 +527,7 @@ Commits in the follow-on series:
    on `photos.length >= 1`). Inline server fns: `getItemForEdit`,
    `updateItem`, `removeItemPhoto`, `setItemPhotoOrder`,
    `setItemPhotoAlt`, `publishItem`, `unpublishItem`. Admin index gets
-   draft chip (slate/zinc color) + draft option in row dropdown. The row
+   draft chip (zinc color) + draft option in row dropdown. The row
    status dropdown also needs the publish gate: today's `setItemStatus`
    accepts any `ItemStatus`, so a draft -> available transition via the
    dropdown would bypass the `photos.length >= 1` check that

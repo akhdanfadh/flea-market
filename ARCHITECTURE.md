@@ -119,6 +119,8 @@ Constraints:
 
 Application-level rule: every item must have at least one `en` translation before save. Enforced in the create/edit logic, not in the DB schema, since SQLite triggers for this kind of constraint are clunky.
 
+**Encoding split: content vs. slug.** Title and description fields accept full UTF-8 — Japanese, accented Latin, anything renders. The page already pulls Noto Sans + Noto Sans JP, so CJK text displays in the right font without additional work. Slugs are deliberately constrained to ASCII alphanumerics + hyphens (`SLUG_PATTERN`) so URLs stay readable and shareable regardless of what the title contains. `slugifyTitle` strips non-ASCII when auto-generating: a Japanese-only title yields just the date prefix (`20260515`), a mixed title like `"Kotatsu heated table コタツ"` yields `20260515-kotatsu-heated-table`. The admin can manually edit the slug via the "Edit slug" affordance for items where the auto-derived ASCII portion isn't what they want.
+
 **Draft status**
 
 `draft` is the admin's working state - items are created in `draft` from the new-item page, then promoted to `available` via an explicit Publish action once metadata and photos are in place. Public loaders filter `ne(items.status, "draft")` so visitors never see drafts on the list page, and a draft slug visited directly returns `notFound()`. The schema default for `status` stays `available` so any non-form insert path (seed script, ad-hoc) lands published; the new-item form sets `draft` explicitly.
@@ -263,6 +265,30 @@ If the admin password leaks, rotate both.
 
 - Compromise of Cloudflare account (out of scope; same risk applies to any cloud-deployed app)
 - The admin's device being compromised (out of scope)
+
+## Drafts
+
+This section describes the full drafts lifecycle. The "Save draft" form lands first; the edit page, photo upload UUID-prefix refactor, and `publishItem` gate land in the same follow-on commit. Where bullets below describe behavior that's intent-not-yet-shipped, they're called out inline.
+
+Item creation is a two-step UX. The admin lands on `/admin/new/` with a minimal form (English title + description, optional Indonesian, plus the auto-previewed slug); clicking **Save draft** inserts the row with `status: "draft"` and empty `photos`, then redirects to `/admin/<slug>/edit/`. The edit page is where photos, price, and the rest of the metadata get filled in; it also exposes an explicit **Publish** action that flips status from `draft` to `available` (refused unless `photos.length >= 1`).
+
+Why two steps rather than one combined form:
+
+- **Atomic photo lifecycle.** Photos can't be uploaded before the row exists, so abandoned half-filled forms can't orphan R2 objects under a placeholder prefix. Every photo is tied to a real `items.id` from the moment it's uploaded.
+- **Multi-session resilience.** A draft persists across browser closures and devices. The admin can start an item on their phone, finish on desktop.
+- **Per-photo failure isolation.** Uploads happen one at a time against the existing row, so a single flaky upload doesn't block the rest of the photo set.
+- **Slug stability at upload time.** R2 keys will be prefixed with the item's UUID (`<items.id>/<timestamp>-<rand>.<ext>`) once the upload endpoint refactor lands alongside the edit page, so slug renames after upload don't rewrite keys. Today the upload endpoint still uses the slug prefix - the migration ships alongside the edit page.
+
+Visibility:
+
+- Public list and detail loaders both filter `ne(items.status, "draft")`; a direct hit on a draft slug returns 404 (`notFound()`). Draft rows are invisible to visitors regardless of how they arrive.
+- Admin index shows drafts mixed with published rows, with a zinc status chip distinguishing them from the green/amber/rose colors of `available`/`reserved`/`sold`. The Name link on a draft row points to the admin edit page rather than the public detail (which would 404).
+
+Status transitions (full set lands with the edit + publish commit):
+
+- Any state -> `draft` is freely reachable via the admin's row-status dropdown (an admin can unpublish at any time). _Shipped today._
+- `draft -> available` will be gated on `photos.length >= 1` and route through `publishItem` so the gate is enforced regardless of which UI surface triggers the transition. _Today the dropdown calls `setItemStatus` directly with no gate; the dropdown rewire ships alongside the edit page._
+- `available <-> reserved <-> sold` are arbitrary transitions through `setItemStatus`; the dropdown shows the published labels and applies the status directly. _Shipped today._
 
 ## Cart and contact flow
 

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
 
 import { hasAdminSession, verifyBearer } from "@/lib/auth.server.ts";
+import { SLUG_PATTERN } from "@/lib/slug.ts";
 
 const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -9,10 +10,6 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/webp": "webp",
   "image/heic": "heic",
 };
-
-// Slug format is `YYYYMMDD-<kebab-case-title>`: alphanumeric on both ends,
-// hyphens allowed in the middle only, 1-100 chars total.
-const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/;
 
 export const Route = createFileRoute("/admin/api/upload")({
   server: {
