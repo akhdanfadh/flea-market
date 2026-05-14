@@ -19,6 +19,11 @@ await db.delete(items);
 
 const today = "20260513";
 
+// Spread across all three statuses (available / reserved / sold) and both price
+// tiers (paid / free) so every render path on the list and detail pages has a real
+// seed row to exercise. Fridge carries multiple photos to demonstrate the carousel.
+// Bicycle stays photoless + en-only to keep the no-photo and EN-fallback paths covered.
+
 const fridgeSlug = `${today}-mini-fridge-sharp-sjd14f`;
 const [fridge] = await db
   .insert(items)
@@ -27,7 +32,10 @@ const [fridge] = await db
     priceAmount: 8000,
     priceCurrency: "JPY",
     status: "available",
-    photos: [{ key: `${fridgeSlug}/seed-1.jpg`, alt: "Closed fridge front" }],
+    photos: [
+      { key: `${fridgeSlug}/seed-1.jpg`, alt: "Closed fridge front" },
+      { key: `${fridgeSlug}/seed-2.jpg`, alt: "Fridge interior with shelves" },
+    ],
   })
   .returning();
 
@@ -51,6 +59,18 @@ const [books] = await db
     priceCurrency: null,
     status: "available",
     photos: [{ key: `${booksSlug}/seed-1.jpg`, alt: "Stacked paperbacks" }],
+  })
+  .returning();
+
+const kotatsuSlug = `${today}-kotatsu-with-futon`;
+const [kotatsu] = await db
+  .insert(items)
+  .values({
+    slug: kotatsuSlug,
+    priceAmount: 5000,
+    priceCurrency: "JPY",
+    status: "sold",
+    photos: [{ key: `${kotatsuSlug}/seed-1.jpg`, alt: "Kotatsu table with futon" }],
   })
   .returning();
 
@@ -90,6 +110,20 @@ await db.insert(itemTranslations).values([
     description:
       "Campuran fiksi sastra dan detektif. Sepuluh buku saku dalam kondisi baik. Gratis untuk yang berminat; ambil di sekitar Stasiun Sendai.",
   },
+  {
+    itemId: kotatsu.id,
+    language: "en",
+    title: "Kotatsu heated table with futon (75cm)",
+    description:
+      "Compact 75cm-square kotatsu with the matching futon and heater unit. Used two winters; warms up quickly and the futon is lint-rolled clean. Already sold to a neighbor, scheduled for pickup this weekend.",
+  },
+  {
+    itemId: kotatsu.id,
+    language: "id",
+    title: "Meja kotatsu dengan futon (75 cm)",
+    description:
+      "Kotatsu kompak 75x75 cm dengan futon dan unit pemanasnya. Dipakai dua musim dingin; cepat panas, futon bersih. Sudah terjual ke tetangga, akan diambil akhir pekan ini.",
+  },
 ]);
 
-console.log("Seeded 3 items and 5 translations.");
+console.log("Seeded 4 items and 7 translations.");
