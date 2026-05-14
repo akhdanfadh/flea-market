@@ -105,6 +105,15 @@ fetches current docs and avoids stale training data.
    consulting shadcn docs, use the Base UI examples (`/docs/components/base/...`),
    not the Radix paths. See `.agents/skills/shadcn/rules/base-vs-radix.md` for the
    API differences (e.g. `render` prop vs `asChild`).
+9. The app is **dark mode only** — `.dark` is set on `<html>` in `src/routes/__root.tsx`.
+   Do not add `next-themes`, a `ThemeProvider`, a toggle, or shadcn's TanStack Start
+   `ScriptOnce` recipe; those exist to support user choice, which is an explicit
+   non-goal. When overriding a shadcn Button's background on `outline` / `ghost` /
+   `secondary` (e.g. a `bg-black/40` photo-overlay), also set the matching `dark:bg-*`
+   variant — those base variants carry `dark:` rules like `dark:bg-input/30` that win
+   over a plain `bg-*` override at CSS source order and repaint the button
+   white-translucent. See `NAV_BUTTON_CLASS` in `src/components/detail-content.tsx`
+   for the pattern.
 
 ### Dependencies and tooling
 

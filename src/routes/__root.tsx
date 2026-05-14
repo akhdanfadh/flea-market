@@ -55,7 +55,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const loaderData = Route.useLoaderData();
   const language = loaderData?.language ?? "en";
   return (
-    <html lang={language}>
+    <html lang={language} className="dark">
       <head>
         <HeadContent />
       </head>

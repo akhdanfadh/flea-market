@@ -163,7 +163,7 @@ function Home() {
     : undefined;
   // Keep the last shown row around during the Dialog's close animation. Without this,
   // closing clears search.item synchronously, the conditional content unmounts, and
-  // the Dialog briefly fades out an empty white popover background.
+  // the Dialog briefly fades out an empty popover surface.
   // We update the ref in an effect (not during render) - concurrent renders can be
   // aborted and would otherwise leave the ref ahead of committed state.
   const lastModalRowRef = useRef(activeModalRow);
@@ -347,7 +347,7 @@ function Home() {
                         "absolute bottom-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm sm:bottom-3 sm:left-3 sm:text-sm",
                         item.priceAmount === null || item.priceCurrency === null
                           ? "bg-green-700 text-white"
-                          : "bg-foreground/85 text-background",
+                          : "bg-black/50 text-white",
                       )}
                     >
                       {item.priceAmount === null || item.priceCurrency === null

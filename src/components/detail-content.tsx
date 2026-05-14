@@ -36,6 +36,11 @@ export type DetailTranslation = {
 // is -left-12 / -right-12 (outside the photo); we pull them back inside with left-2 /
 // right-2 and drop the outline-variant border so they don't show a visible ring.
 //
+// dark: overrides exist because the underlying outline variant carries
+// dark:bg-input/30 (a white-tinted overlay) and dark:hover:bg-input/50. Without
+// explicit dark:bg-black/40 / dark:hover:bg-black/60 the variant would repaint the
+// button white-translucent under our forced .dark root.
+//
 // The carousel button is vertically centered via -translate-y-1/2 (translate up by
 // half its height after anchoring at top-1/2). The base Button class adds
 // active:not-aria-[haspopup]:translate-y-px on press, which REPLACES --tw-translate-y
@@ -43,7 +48,7 @@ export type DetailTranslation = {
 // its 32px height). Override active with the same -translate-y-1/2 so press changes
 // nothing. !important guards against tailwind-merge missing the variant.
 const NAV_BUTTON_CLASS =
-  "size-8 border-0 bg-black/40 text-white shadow-none backdrop-blur-sm hover:bg-black/60 hover:text-white active:not-aria-[haspopup]:-translate-y-1/2!";
+  "size-8 border-0 bg-black/40 text-white shadow-none backdrop-blur-sm hover:bg-black/60 hover:text-white dark:bg-black/40 dark:hover:bg-black/60 active:not-aria-[haspopup]:-translate-y-1/2!";
 
 export function DetailContent({
   item,
