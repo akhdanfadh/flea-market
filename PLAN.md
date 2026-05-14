@@ -296,7 +296,7 @@ UI polish:
 - **Photo carousel** via shadcn / Embla (`Carousel` / `CarouselContent` / `CarouselItem` / `CarouselPrevious` / `CarouselNext`). Loop enabled when there's more than one slide. `1 / N` indicator pill at bottom-right tracking Embla's `select` event. Default Embla `duration` kept to avoid spring overshoot.
 - **Pending skeletons** on both `/` and `/$slug/` via shadcn `Skeleton`, with `pendingMs: 200` and `pendingMinMs: 300` so fast loaders skip the skeleton and slow ones don't flicker. Only fires on client-side nav; SSR-rendered HTML never sees them.
 - **Status banner** overlay (`StatusBanner` in `detail-content.tsx`): horizontal sash near the top of the photo with red "SOLD" or yellow "RESERVED", returns null for `available`. `pointer-events-none` so swipes pass through.
-- **Mercari-style price pill** at bottom-left of every item photo - list cards, detail page, and modal - extracted into a shared `PricePill` component (`src/components/price-pill.tsx`) with `size="card" | "detail"` variants. Fixed `bg-black/50` to match the carousel chrome family with `backdrop-blur-sm` for legibility; green pill for "Free" items. `card` steps `text-xs → sm:text-sm`; `detail` steps `text-sm → sm:text-base → lg:text-lg` with matching padding/offset bumps, so the chip reads as a chip on a list tile and as a headline next to the hero photo. Replaces the previous "price text under the title" on the detail page.
+- **Mercari-style price pill** at bottom-left of every item photo - list cards, detail page, and modal - extracted into a shared `PricePill` component (`src/components/price-pill.tsx`) with `size="card" | "detail"` variants. Fixed `bg-black/50` to match the carousel chrome family with `backdrop-blur-sm` for legibility; green pill for "Free" items. `card` steps `text-xs -> sm:text-sm`; `detail` steps `text-sm -> sm:text-base -> lg:text-lg` with matching padding/offset bumps, so the chip reads as a chip on a list tile and as a headline next to the hero photo. Replaces the previous "price text under the title" on the detail page.
 - **Card title** is a separate Link to `/$slug/` with `hover:underline`; plain click does an SPA nav to the standalone page (not the modal). Photo and title are two independent click targets on the same card.
 - **Filter chips** rebuilt with shadcn `Button` (`variant="default" | "outline"`) plus `rounded-full` override to keep the chip shape. Filter rows wrap to one line on desktop and stack on mobile via flex-wrap.
 - **Language pill** lives in the global `SiteHeader` (every route, right side); shadcn `ButtonGroup` segmented control; full reload on click via raw `<a>` rendered through Base UI Button's `render` prop (the `/lang/$lang` endpoint Set-Cookies and 302s, which a `<Link>` would skip).
@@ -381,7 +381,164 @@ Pitfalls baked in:
 
 ## Step 8: Admin CRUD
 
-**Goal**: Admin can create, edit, mark status, and delete items.
+**Status**: Partial (2026-05-15). Admin index (table page) landed; new and edit
+pages stubbed pending the drafts refactor below. Original Step 8 plan assumed
+photos as form state (uploaded on drop, committed on Save) - review of that
+approach surfaced two problems (abandoned-create orphans, and a real bug where
+`slugifyTitle("")` returns just the date prefix and lets photos upload under
+`20260514/...` with no item identity). Step 8 is intentionally split: the table
+page ships now in its reviewed final form, then a follow-on series of commits
+adds first-class draft items + photos-as-server-state.
+
+What landed:
+
+- `src/routes/admin/_auth/index.tsx` - admin table. Columns: Name (Link to
+  public `/$slug/`), Status, Price, photo-count icon, lang-coverage icon
+  (`en` or `en,id`), Updated (ISO-ish `YYYY-MM-DD HH:MM`), Actions (Edit Link
+  - Delete AlertDialog). Header row has muted bg; even rows zebra-striped at
+    `bg-muted/20`, scoped via `:not(:hover)` so the existing `hover:bg-muted/50`
+    on `TableRow` wins. Filter chips for status (All / Available / Reserved /
+    Sold); state lives in URL search params, Zod-validated, `replace: true` so
+    per-click changes don't pile up in history. Two empty states: catalog-empty
+    shows a "Create item" CTA Link; filter-excluded-everything shows a "No
+    matches" + Clear filter inline.
+- Per-row **status quick-action**: shadcn `DropdownMenu` trigger styled as a
+  status-colored Button. Trigger sizes itself dynamically to the widest label
+  via stacked `invisible aria-hidden` siblings inside a `grid text-left`; popup
+  matches via `min-w-0` override of the default `min-w-32`. Current item shows
+  a right-aligned `CheckIcon`, disabled to prevent re-select. Optimistic UI:
+  click -> row.status flips immediately, `setItemStatus` server fn fires,
+  `router.invalidate()` re-fetches; on error, revert. Toast pair on success
+  ("Status updated" / `Changed from X to Y for "name"`) and on error.
+- Per-row **delete**: shadcn `AlertDialog` with `size="sm"`. Trigger is an
+  outline Button with a `text-destructive` Trash2 icon (matches the Edit pencil
+  Button visually inside a `ButtonGroup`; only the icon color signals the
+  destructive intent). Dialog uses `variant="destructive"` on the action and
+  `variant="outline"` on Cancel. Footer band overridden to `bg-background` so
+  the buttons sit on a deeper shelf than the dialog body (the default
+  `bg-muted/50` blends with the outline Button's `dark:bg-input/30` in Gruvbox
+  dark). Dialog is **controlled** via `useState`-based `deleteOpen`; clicking
+  Delete closes the dialog first so the exit animation runs before the row
+  unmounts via `router.invalidate()`.
+- **Pending skeleton** (`pendingMs: 200`, `pendingMinMs: 300`) mirroring the
+  table layout so client-side nav (edit/new -> back) doesn't pop in cold.
+  SSR-served first hits skip the skeleton entirely.
+- **Toaster** (shadcn `Sonner`, position top-center) mounted inside
+  `/admin/_auth.tsx` so success/error toasts surface only on admin pages.
+  Neutral popover-colored background (no `richColors` variant tints - tried
+  it, judged too loud against Gruvbox). Title inherits `--popover-foreground`
+  via Sonner's `--normal-text` variable; description gets
+  `text-muted-foreground!` via `toastOptions.classNames.description` (the
+  `!` modifier needed because Sonner injects its CSS at runtime after our
+  `<link>`'d stylesheet, tying specificity and winning on source order).
+  Every admin action uses the title + description shape.
+- Quote convention unified: all user-facing references to items / status values
+  use straight double quotes (`"Kotatsu..."`, `"sold"`), via `&quot;` in JSX
+  text where needed.
+
+What is **stubbed** pending the drafts refactor:
+
+- `src/routes/admin/_auth/new.tsx` - placeholder div, no form.
+- `src/routes/admin/_auth/$slug/edit.tsx` - placeholder div, no form. (Edit
+  Links on the table resolve to it; admin sees "lands with the drafts
+  refactor".)
+- No photo dropzone, no @dnd-kit grid, no shared `ItemForm` component, no
+  `react-hook-form` / `@hookform/resolvers` / dnd-kit wiring yet - those land
+  in the drafts series even though the deps are already installed (commit
+  `cd32d04`).
+- No `createItem` / `updateItem` / `getItemForEdit` server fns yet.
+
+Pitfalls baked in (carried over from earlier exploration):
+
+- TanStack Start's import-protection plugin only allows imports from
+  `*.server.ts` modules when every usage is inside a `createServerFn(...).handler()`
+  or `createMiddleware(...).server()` body. Chaining `.middleware([m])` does
+  not count, and re-exporting server fns through a shared client-reachable
+  module is blocked. The table page's `getAdminItems` / `setItemStatus` /
+  `deleteItem` are inline in the route file, matching the precedent of
+  `_auth.tsx` and `login.tsx`. Auth is checked at the top of every handler
+  via `isAdminSession(getCookie(...), env.COOKIE_SECRET)`. The same pattern
+  carries forward into the drafts series.
+- Zod 4.4 + `@hookform/resolvers@5.2`'s `zodResolver` types are incompatible
+  (the resolver expects `_zod.version.minor === 0`). Use
+  `standardSchemaResolver` from `@hookform/resolvers/standard-schema` instead;
+  Zod 4 implements Standard Schema natively. (Relevant once the drafts series
+  re-introduces a form.)
+- Base UI shadcn primitives use the `render` prop, not `asChild`. The trigger
+  pattern for `AlertDialog`, `DropdownMenu`, and `Button`-as-Link is
+  `<XTrigger render={<Button .../>} />` or
+  `<Button render={<Link to=".../" />} nativeButton={false}>children</Button>`.
+- The TanStack Router config has `trailingSlash: 'always'`, so route refs in
+  `Link` and `navigate` must include the trailing slash (e.g.
+  `/admin/$slug/edit/`, not `/admin/$slug/edit`). Typecheck catches this.
+
+Production verification deferred to after the drafts refactor lands (commits
+2-5 below).
+
+### Drafts + photos as server state (follow-on commits)
+
+Rationale: the form-state photo approach has unfixable orphan vectors at
+flow-design level (admin abandons mid-create -> R2 objects orphan under a
+preview-slug prefix; or worse, under just the date if the title is empty).
+Rather than ship that and lean on a future GC script, we shift to:
+
+- Add `"draft"` to `ITEM_STATUSES`. Drafts are excluded from the public list
+  and detail loaders.
+- New-item page is metadata-only - title + descriptions + slug. "Save draft"
+  inserts the `items` row immediately with `status: "draft"`,
+  `photos: []`. Redirect to `/admin/<slug>/edit/`.
+- Photos become **server state** on the edit page: each upload, remove,
+  reorder, and alt-edit is its own server fn that atomically updates
+  `items.photos`. R2 key prefix uses `items.id` (UUID), not slug - slug
+  rename never affects keys.
+- Publish flow: separate `publishItem` server fn flips status from `draft` to
+  `available`, refuses if `photos.length === 0`.
+
+Why this eliminates the orphan problem:
+
+- Photos cannot exist without an `items` row (the row is created first).
+- Slug-vs-key decoupling collapses to UUID-vs-slug, which is self-evident.
+- Remaining orphan vector is only "publish-time R2 hiccups" at process-death
+  scale - rare enough to ignore at single-admin scale.
+
+Commits in the follow-on series:
+
+2. **`chore(schema): add draft status, exclude from public loaders`** -
+   `src/db/schema.ts` adds `"draft"` to `ITEM_STATUSES`. Public list
+   (`src/routes/index.tsx`) and detail (`src/routes/$slug.tsx`) loaders filter
+   `where(ne(items.status, "draft"))`. ARCHITECTURE.md #Data model updated.
+   User runs `pnpm db:push` against Turso before deploy.
+3. **`feat(admin): draft-creation flow`** - re-adds `src/lib/slug.ts`,
+   `src/lib/slug.server.ts`; new `src/lib/item-schema.ts` exporting a
+   `draftItemPayloadSchema` (no photos, no price, no status). The new-item
+   route becomes a minimal RHF form with a single "Save draft" button +
+   inline `createDraftItem` server fn that inserts the row and redirects.
+   ARCHITECTURE.md adds #Drafts subsection.
+4. **`feat(admin): photos as server state`** - upload endpoint refactored
+   from `?slug=` to `?item=` with atomic R2 PUT + `items.photos` append;
+   R2 key prefix becomes `<itemId>/<timestamp>-<rand>.<ext>`. Photo
+   dropzone and grid components rewired to drive a server-state photo
+   section. The per-photo server fns (`removeItemPhoto`,
+   `setItemPhotoOrder`, `setItemPhotoAlt`) land with the edit route file
+   in commit 5; commits 4 + 5 **deploy together**. ARCHITECTURE.md
+   #Image pipeline updated for the UUID prefix.
+5. **`feat(admin): item editing and publish flow`** - full edit route with
+   metadata RHF form + server-state photo section + Publish button (gated
+   on `photos.length >= 1`). Inline server fns: `getItemForEdit`,
+   `updateItem`, `removeItemPhoto`, `setItemPhotoOrder`,
+   `setItemPhotoAlt`, `publishItem`, `unpublishItem`. Admin index gets
+   draft chip (slate/zinc color) + draft option in row dropdown.
+   `DEFAULT_CURRENCY` finally wired into `wrangler.jsonc` + env types
+   (the edit form's price section consumes it).
+
+Deferred to a possible follow-up commit:
+
+- **Undo-toast on photo removal.** Sonner toast with a 5s "Undo" action that
+  holds the `File` blob client-side and re-uploads if invoked. ~40 LOC; build
+  later if removal mistakes turn out to be common.
+
+**Goal**: Admin can create drafts, attach photos progressively, edit
+metadata, and publish; visitors never see draft items.
 
 Tasks:
 

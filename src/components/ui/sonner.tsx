@@ -33,7 +33,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          // Sonner injects its CSS at runtime AFTER our <link>'d styles, so
+          // its `[data-sonner-toaster][data-sonner-theme='dark'] [data-description]`
+          // rule (specificity 0,3,0) would beat any equal-specificity override
+          // we'd write. The `!` modifier compiles to `!important` and wins
+          // regardless. Title already inherits popover-foreground correctly;
+          // only the description needs this.
+          description: "text-muted-foreground!",
         },
       }}
       {...props}

@@ -4,6 +4,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 
 // POST so the response is uncached by default; a GET RPC for an auth check
@@ -32,6 +33,7 @@ function AdminLayout() {
         </form>
       </header>
       <Outlet />
+      <Toaster position="top-center" />
     </div>
   );
 }

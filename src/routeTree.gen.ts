@@ -18,6 +18,8 @@ import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminAuthRouteImport } from './routes/admin/_auth'
 import { Route as AdminAuthIndexRouteImport } from './routes/admin/_auth/index'
 import { Route as AdminApiUploadRouteImport } from './routes/admin/api/upload'
+import { Route as AdminAuthNewRouteImport } from './routes/admin/_auth/new'
+import { Route as AdminAuthSlugEditRouteImport } from './routes/admin/_auth/$slug/edit'
 
 const SlugRoute = SlugRouteImport.update({
   id: '/$slug',
@@ -64,6 +66,16 @@ const AdminApiUploadRoute = AdminApiUploadRouteImport.update({
   path: '/admin/api/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAuthNewRoute = AdminAuthNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AdminAuthRoute,
+} as any)
+const AdminAuthSlugEditRoute = AdminAuthSlugEditRouteImport.update({
+  id: '/$slug/edit',
+  path: '/$slug/edit',
+  getParentRoute: () => AdminAuthRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,8 +85,10 @@ export interface FileRoutesByFullPath {
   '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
+  '/admin/new': typeof AdminAuthNewRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
   '/admin/': typeof AdminAuthIndexRoute
+  '/admin/$slug/edit': typeof AdminAuthSlugEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,8 +97,10 @@ export interface FileRoutesByTo {
   '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
+  '/admin/new': typeof AdminAuthNewRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
   '/admin': typeof AdminAuthIndexRoute
+  '/admin/$slug/edit': typeof AdminAuthSlugEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,8 +111,10 @@ export interface FileRoutesById {
   '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
+  '/admin/_auth/new': typeof AdminAuthNewRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
   '/admin/_auth/': typeof AdminAuthIndexRoute
+  '/admin/_auth/$slug/edit': typeof AdminAuthSlugEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,8 +126,10 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/images/$'
     | '/lang/$lang'
+    | '/admin/new'
     | '/admin/api/upload'
     | '/admin/'
+    | '/admin/$slug/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,8 +138,10 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/images/$'
     | '/lang/$lang'
+    | '/admin/new'
     | '/admin/api/upload'
     | '/admin'
+    | '/admin/$slug/edit'
   id:
     | '__root__'
     | '/'
@@ -129,8 +151,10 @@ export interface FileRouteTypes {
     | '/admin/logout'
     | '/images/$'
     | '/lang/$lang'
+    | '/admin/_auth/new'
     | '/admin/api/upload'
     | '/admin/_auth/'
+    | '/admin/_auth/$slug/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -209,15 +233,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminApiUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/_auth/new': {
+      id: '/admin/_auth/new'
+      path: '/new'
+      fullPath: '/admin/new'
+      preLoaderRoute: typeof AdminAuthNewRouteImport
+      parentRoute: typeof AdminAuthRoute
+    }
+    '/admin/_auth/$slug/edit': {
+      id: '/admin/_auth/$slug/edit'
+      path: '/$slug/edit'
+      fullPath: '/admin/$slug/edit'
+      preLoaderRoute: typeof AdminAuthSlugEditRouteImport
+      parentRoute: typeof AdminAuthRoute
+    }
   }
 }
 
 interface AdminAuthRouteChildren {
+  AdminAuthNewRoute: typeof AdminAuthNewRoute
   AdminAuthIndexRoute: typeof AdminAuthIndexRoute
+  AdminAuthSlugEditRoute: typeof AdminAuthSlugEditRoute
 }
 
 const AdminAuthRouteChildren: AdminAuthRouteChildren = {
+  AdminAuthNewRoute: AdminAuthNewRoute,
   AdminAuthIndexRoute: AdminAuthIndexRoute,
+  AdminAuthSlugEditRoute: AdminAuthSlugEditRoute,
 }
 
 const AdminAuthRouteWithChildren = AdminAuthRoute._addFileChildren(
