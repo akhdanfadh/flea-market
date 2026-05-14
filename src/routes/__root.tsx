@@ -1,6 +1,6 @@
 import { getLanguage } from "#/lib/lang.server.ts";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
 
@@ -32,11 +32,28 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  shellComponent: RootDocument,
+  component: () => (
+    <RootDocument>
+      <Outlet />
+    </RootDocument>
+  ),
+  errorComponent: ({ error }) => (
+    <RootDocument>
+      <div className="p-6">
+        <h1 className="text-lg font-semibold">Something went wrong</h1>
+        <pre className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
+          {error instanceof Error ? error.message : String(error)}
+        </pre>
+      </div>
+    </RootDocument>
+  ),
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { language } = Route.useLoaderData();
+  // Loader data is unavailable when this renders under errorComponent (the
+  // loader itself may have thrown), so fall back to the default language.
+  const loaderData = Route.useLoaderData();
+  const language = loaderData?.language ?? "en";
   return (
     <html lang={language}>
       <head>
