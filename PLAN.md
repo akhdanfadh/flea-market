@@ -272,6 +272,45 @@ Pitfalls:
 
 ## Step 6: Public list page and detail page
 
+**Status**: Done (2026-05-14).
+
+Foundation:
+
+- `trailingSlash: 'always'`; Zod 4 installed; schema enum constants `CURRENCIES` / `LANGUAGES` / `ITEM_STATUSES` as the single source of truth.
+- `MINOR_UNITS` and `formatPrice` in `src/lib/money.ts`; supported currencies narrowed to JPY / IDR / USD.
+- Server-only `getLanguage()` in `src/lib/lang.server.ts` (cookie -> `Accept-Language` -> `env.DEFAULT_LANGUAGE`).
+- `/lang/$lang` toggle endpoint; cookie `Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly` plus `Secure` only when the request is HTTPS (so LAN-IP phone testing works); 302 to same-origin `Referer` else `/`.
+- Root loader wires the resolved language into `<html lang>` on first paint, no client-side flip.
+- Router-level `defaultNotFoundComponent` so any `throw notFound()` renders a small "Not found" page with a link back to the catalog.
+
+Public pages:
+
+- `/` list page: `validateSearch` Zod schema for status / price / q / item filters persisted to URL (default-stripped — URL only carries non-default state); EN-translation fallback; client-side filter over the in-memory rows.
+- `/$slug/` detail page; back link is a plain `<Link to="/">`, no `history.back()` intercept (the previous entry could be cross-origin if the visitor arrived via an external link, and `canGoBack()` alone can't tell — see also the modal's `modalPushedBySessionRef` guard, which doesn't translate to a route that mounts fresh per navigation). Trade-off: title-click → standalone → back lands on `/` without the previous filter state, accepted to never walk visitors off-site. `throw notFound()` on unknown slugs.
+- Shared `DetailContent` component in `src/components/detail-content.tsx` rendered by both the standalone `$slug` route and the modal overlay; takes a serialized item + translation as props, owns the photo carousel and chrome (status banner, photo presentation). Wire shape is `DetailItem` (canonical type in that file); `serializeItem()` in `src/lib/serialize-item.ts` is the single Drizzle-row → wire-shape converter used by both loaders.
+- `page-two.tsx` deleted; navigation stub served its purpose.
+
+UI polish:
+
+- **Modal-over-list** pattern via TanStack Router `routeMask`. Plain card-click opens a `<Dialog>` rendered on `/` with the URL bar showing `/$slug/`. Modifier-click / right-click falls through to the Link's real `/$slug/` href (opens standalone page in a new tab). `unmaskOnReload: true` means a refresh on the masked URL renders the standalone detail route, so shared links degrade gracefully. Modal opens track via `modalPushedBySessionRef` so closing never `history.back()`s off-site for visitors who arrived via an external link.
+- **Photo carousel** via shadcn / Embla (`Carousel` / `CarouselContent` / `CarouselItem` / `CarouselPrevious` / `CarouselNext`). Loop enabled when there's more than one slide. `1 / N` indicator pill at bottom-right tracking Embla's `select` event. Default Embla `duration` kept to avoid spring overshoot.
+- **Pending skeletons** on both `/` and `/$slug/` via shadcn `Skeleton`, with `pendingMs: 200` and `pendingMinMs: 300` so fast loaders skip the skeleton and slow ones don't flicker. Only fires on client-side nav; SSR-rendered HTML never sees them.
+- **Status banner** overlay (`StatusBanner` in `detail-content.tsx`): horizontal sash near the top of the photo with red "SOLD" or yellow "RESERVED", returns null for `available`. `pointer-events-none` so swipes pass through.
+- **Mercari-style price pill** at bottom-left of the card photo (theme-aware dark, with `backdrop-blur-sm` for legibility); green pill for "Free" items.
+- **Card title** is a separate Link to `/$slug/` with `hover:underline`; plain click does an SPA nav to the standalone page (not the modal). Photo and title are two independent click targets on the same card.
+- **Filter chips** rebuilt with shadcn `Button` (`variant="default" | "outline"`) plus `rounded-full` override to keep the chip shape. Filter rows wrap to one line on desktop and stack on mobile via flex-wrap.
+- **Language pill** rebuilt as shadcn `ButtonGroup` segmented control; full reload on click via raw `<a>` rendered through Base UI Button's `render` prop.
+- **Search input** wrapped in shadcn `InputGroup` with a `<SearchIcon>` addon.
+- **Empty state** via shadcn `Empty`: branches on `rows.length === 0` (catalog truly empty) vs `filtered.length === 0` (filters excluded everything) — only the second case shows the Reset button.
+- **Dev fallback** in `optimizedImageUrl`: `import.meta.env.DEV` skips the `/cdn-cgi/image` prefix and returns the raw Worker proxy, since Miniflare doesn't emulate Cloudflare's edge image transformer.
+
+Known gaps deferred:
+
+- UI-chrome strings ("All", "Free", "No items match.", status labels) are English-only; bilingual UI strings are an architecture decision for a later step.
+- "Pasted `/?item=slug` in a fresh tab" shows the modal but with the unmasked URL — masks are per-navigation, not URL-derived. Functional but slightly ugly URL on that one edge case.
+
+Production verification deferred to the user's next deploy.
+
 **Goal**: Visitors can browse items with real photos.
 
 Tasks:

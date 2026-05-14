@@ -6,7 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 import appCss from "../styles.css?url";
 
-const loadRootContext = createServerFn().handler(() => ({
+const loadRootContext = createServerFn({ method: "GET" }).handler(() => ({
   language: getLanguage(),
 }));
 

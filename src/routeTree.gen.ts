@@ -9,15 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PageTwoRouteImport } from './routes/page-two'
+import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangLangRouteImport } from './routes/lang/$lang'
 import { Route as ImagesSplatRouteImport } from './routes/images/$'
 import { Route as AdminApiUploadRouteImport } from './routes/admin/api/upload'
 
-const PageTwoRoute = PageTwoRouteImport.update({
-  id: '/page-two',
-  path: '/page-two',
+const SlugRoute = SlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,14 +43,14 @@ const AdminApiUploadRoute = AdminApiUploadRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/page-two': typeof PageTwoRoute
+  '/$slug': typeof SlugRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/page-two': typeof PageTwoRoute
+  '/$slug': typeof SlugRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
@@ -58,25 +58,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/page-two': typeof PageTwoRoute
+  '/$slug': typeof SlugRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/page-two'
-    | '/images/$'
-    | '/lang/$lang'
-    | '/admin/api/upload'
+  fullPaths: '/' | '/$slug' | '/images/$' | '/lang/$lang' | '/admin/api/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/page-two' | '/images/$' | '/lang/$lang' | '/admin/api/upload'
+  to: '/' | '/$slug' | '/images/$' | '/lang/$lang' | '/admin/api/upload'
   id:
     | '__root__'
     | '/'
-    | '/page-two'
+    | '/$slug'
     | '/images/$'
     | '/lang/$lang'
     | '/admin/api/upload'
@@ -84,7 +79,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PageTwoRoute: typeof PageTwoRoute
+  SlugRoute: typeof SlugRoute
   ImagesSplatRoute: typeof ImagesSplatRoute
   LangLangRoute: typeof LangLangRoute
   AdminApiUploadRoute: typeof AdminApiUploadRoute
@@ -92,11 +87,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/page-two': {
-      id: '/page-two'
-      path: '/page-two'
-      fullPath: '/page-two'
-      preLoaderRoute: typeof PageTwoRouteImport
+    '/$slug': {
+      id: '/$slug'
+      path: '/$slug'
+      fullPath: '/$slug'
+      preLoaderRoute: typeof SlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -132,7 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PageTwoRoute: PageTwoRoute,
+  SlugRoute: SlugRoute,
   ImagesSplatRoute: ImagesSplatRoute,
   LangLangRoute: LangLangRoute,
   AdminApiUploadRoute: AdminApiUploadRoute,

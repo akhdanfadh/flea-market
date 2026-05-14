@@ -72,7 +72,18 @@ Why subdomain instead of sub-path: TanStack Start + Cloudflare Workers Static As
 
 Caveats:
 
-- Always use `<Link>` from TanStack Router for internal navigation rather than hardcoded `href` strings. Reason is no longer "basepath rewriting" but client-side routing benefits (preload-on-intent, scroll restoration, no full reload).
+- Always use `<Link>` from TanStack Router for internal navigation rather than hardcoded `href` strings. Reason is no longer "basepath rewriting" but client-side routing benefits (preload-on-intent, scroll restoration, no full reload). The only exception is `/lang/$lang` — a server-only endpoint that 302s with a `Set-Cookie`; a `<Link>` would skip the response. Those toggles render as raw `<a>` elements.
+
+### Item detail: modal-over-list with route mask
+
+Two routes serve the detail content:
+
+- `/$slug/` — the standalone detail page. SSR'd; renders on direct nav, refresh, share-link load.
+- The same `DetailContent` component rendered inside a `<Dialog>` overlay on `/` when `search.item` is set.
+
+In-app card clicks navigate to `/` with `?item=<slug>` plus a TanStack Router `routeMask` of `to: "/$slug/", params: { slug }`. The router renders the list route (matching `/`) and the modal opens, but the URL bar displays `/$slug/`. `unmaskOnReload: true` means a refresh on the masked URL bypasses the mask entirely and the server renders the standalone `/$slug/` route — shared links degrade to the full page exactly like Instagram's `/p/<id>` pattern.
+
+Modifier-click / right-click on a card falls through to the Link's real `href="/$slug/"`, opening the standalone page in a new tab as the user expects.
 
 ## Data model
 
@@ -154,7 +165,9 @@ The resolved language is returned from the root loader so `<html lang={...}>` an
 
 **Toggle endpoint**:
 
-`GET /lang/$lang` (`src/routes/lang/$lang.ts`) validates the param against the `LANGUAGES` constant in `src/db/schema.ts`, sets the cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `Secure`, `HttpOnly`), then 302-redirects to `Referer` (compared by `URL.origin`, not hostname, so port/scheme mismatch is caught; falls back to `/` on missing / unparsable / cross-origin). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable. `HttpOnly` is included as defense-in-depth — `getLanguage()` reads the cookie server-side, no JS read path exists; revisit if a concrete client-side reader ever lands.
+`GET /lang/$lang` (`src/routes/lang/$lang.ts`) validates the param against the `LANGUAGES` constant in `src/db/schema.ts`, sets the cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `HttpOnly`, plus `Secure` only when the request is HTTPS), then 302-redirects to `Referer` (compared by `URL.origin`, not hostname, so port/scheme mismatch is caught; falls back to `/` on missing / unparsable / cross-origin). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable. `HttpOnly` is included as defense-in-depth — `getLanguage()` reads the cookie server-side, no JS read path exists; revisit if a concrete client-side reader ever lands.
+
+`Secure` is gated on the request protocol so the toggle works in dev over LAN IPs (e.g. `http://192.168.x.x:3000` for phone testing). Browsers exempt `localhost` from the `Secure` requirement but not LAN IPs — a blanket `Secure` would silently drop the cookie there. Production always serves over HTTPS, so `Secure` is always emitted in prod.
 
 **Translation lookup**:
 
@@ -194,6 +207,8 @@ Serving:
 Why proxy through the Worker instead of a public R2 custom domain: an R2 custom domain binds a whole hostname to one bucket, so a generic name like `media.akhdan.dev` would be locked to flea-market only. Proxying via the Worker keeps `flea-market.akhdan.dev` as the single hostname for the app and leaves other subdomains free for unrelated projects. At our scale (~90 lifetime unique transformations, sub-500 daily requests) the Worker request cost is noise.
 
 Counts: ~30 items × 3 variants = 90 unique transformations. The 5,000/month free tier is never close to threatened.
+
+**Dev-mode bypass.** In `pnpm dev` (Miniflare), Cloudflare's edge image transformer at `/cdn-cgi/image` is not emulated. `optimizedImageUrl(key, ...)` in `src/lib/images.ts` checks `import.meta.env.DEV` and returns the raw `/images/<key>` Worker-proxy URL in that case. Production goes through the transformer as normal. The trade-off: dev list pages download full-size originals (no width=400 thumbnails), so a 3MB phone photo will feel noticeably heavier in dev than in prod — fine for the seed fixtures, watch for it once real photos land.
 
 ## Admin auth
 
