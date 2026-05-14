@@ -38,7 +38,7 @@ A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a 
 | Image storage      | Cloudflare R2                                                                          | 10GB free tier; zero egress                                               |
 | Image optimization | Cloudflare Image Transformations on R2-sourced URLs                                    | 5,000 unique transforms/month free; cached forever once generated         |
 | UI components      | shadcn/ui + Tailwind CSS                                                               |                                                                           |
-| Theme              | Dark mode only, no toggle                                                              | `.dark` stamped on `<html>` at SSR; tokens in `src/styles.css`            |
+| Theme              | Gruvbox dark (mirrors akhdan.dev), no toggle                                           | `.dark` stamped on `<html>` at SSR; hex tokens in `src/styles.css`        |
 | Upload UI          | react-dropzone                                                                         | Drag-and-drop file picker; Worker handles the actual upload to R2         |
 | Cart state         | Zustand + localStorage                                                                 | Client-side only, no server state                                         |
 | Admin auth         | Single token in `env.ADMIN_TOKEN`, SHA-256 + `timingSafeEqual`, httpOnly signed cookie |                                                                           |
