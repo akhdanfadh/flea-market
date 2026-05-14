@@ -137,7 +137,7 @@ This gracefully redirects anyone who has the old URL bookmarked.
 
 ## Step 3: Tailwind + shadcn/ui
 
-**Status**: Done (2026-05-13). Initialized shadcn with Base UI primitives (`-b base`), `nova` style, neutral base color, pointer cursor on buttons, Inter font. Installed Button, Sheet, Card, Input, Label, Sonner, AlertDialog. Verified Button + Sheet render styled on the home route in production.
+**Status**: Done (2026-05-13). Initialized shadcn with Base UI primitives (`-b base`), `nova` style, neutral base color, pointer cursor on buttons, Noto Sans (+JP) font. Installed Button, Sheet, Card, Input, Label, Sonner, AlertDialog. Verified Button + Sheet render styled on the home route in production.
 
 **Goal**: Tailwind compiles correctly through Vite, shadcn CLI works, a Button and Sheet component render with the right styling.
 
@@ -207,7 +207,7 @@ Pitfalls:
 
 This step precedes the public list page so step 6 can render real photos against real R2 keys, rather than placeholders.
 
-**Why Worker proxy instead of an R2 public custom domain.** An R2 custom domain binds an entire hostname to one bucket — using a generic name like `media.akhdan.dev` would lock that subdomain to flea-market only. Proxying R2 through the Worker at `/images/<key>` keeps all app traffic under `flea-market.akhdan.dev` and leaves other subdomains free for unrelated projects. At our scale the Worker request cost is negligible: Image Transformations cache transformed variants forever after first generation, so the Worker is invoked once per unique cache miss (~90 lifetime hits). The R2 binding is an in-process RPC, not an HTTP call.
+**Why Worker proxy instead of an R2 public custom domain.** An R2 custom domain binds an entire hostname to one bucket - using a generic name like `media.akhdan.dev` would lock that subdomain to flea-market only. Proxying R2 through the Worker at `/images/<key>` keeps all app traffic under `flea-market.akhdan.dev` and leaves other subdomains free for unrelated projects. At our scale the Worker request cost is negligible: Image Transformations cache transformed variants forever after first generation, so the Worker is invoked once per unique cache miss (~90 lifetime hits). The R2 binding is an in-process RPC, not an HTTP call.
 
 Tasks:
 
@@ -222,7 +222,7 @@ Tasks:
 - Re-run `pnpm cf-typegen` so `env.BUCKET: R2Bucket` and `env.ADMIN_TOKEN: string` are typed
 - Enable Image Transformations for the zone in the Cloudflare dashboard (one-time, not codeable). No entry in Images > Transformations > Sources is required because the transformer and source URL share the same zone
 - Build image-serving splat route at `src/routes/images/$.ts`:
-  - `createFileRoute("/images/$")({ server: { handlers: { GET: ... } } })` — the splat captures the full R2 key
+  - `createFileRoute("/images/$")({ server: { handlers: { GET: ... } } })` - the splat captures the full R2 key
   - Wrap `decodeURIComponent` in try/catch and return 400 on malformed input (a lone `%` in the path otherwise throws `URIError` and 500s)
   - `env.BUCKET.get(key)` -> 404 if null
   - Response: stream body, `obj.writeHttpMetadata(headers)` for Content-Type, `Cache-Control: public, max-age=31536000, immutable`, `ETag: obj.httpEtag` so edge caches aggressively, and `X-Content-Type-Options: nosniff` so browsers don't reinterpret bytes (defense-in-depth against polyglot files)
@@ -233,15 +233,15 @@ Tasks:
 - Build upload endpoint at `src/routes/admin/api/upload.ts`:
   - `createFileRoute("/admin/api/upload")({ server: { handlers: { POST: ... } } })`
   - Auth: `verifyBearer(request, env.ADMIN_TOKEN)` -> 401 on failure. Real Bearer-token auth, not a stub. Step 7 keeps this check and adds cookie-session auth in parallel for the browser admin flow
-  - Accepts POST with binary body and `?slug=...` query param. Validate `slug` against `^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$` — alphanumeric start/end, hyphens allowed in the middle, 1-100 chars. Prevents path traversal and ugly keys
+  - Accepts POST with binary body and `?slug=...` query param. Validate `slug` against `^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$` - alphanumeric start/end, hyphens allowed in the middle, 1-100 chars. Prevents path traversal and ugly keys
   - Reject zero-byte bodies (`content-length === "0"`) with 400 to avoid orphan empty R2 objects
   - Generates key `{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`image/jpeg` -> `jpg`, `image/png` -> `png`, `image/webp` -> `webp`, `image/heic` -> `heic`). Reject other content types with 415
   - Calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
   - Returns `{ key }` as JSON
-- Build `optimizedImageUrl(key, { width })` in `src/lib/images.ts` that emits `/cdn-cgi/image/width={w},quality=75,format=auto/images/{key}` — relative path source resolves against the current zone, no host needed
+- Build `optimizedImageUrl(key, { width })` in `src/lib/images.ts` that emits `/cdn-cgi/image/width={w},quality=75,format=auto/images/{key}` - relative path source resolves against the current zone, no host needed
 - Seed one or two real photos for the existing seed items so step 6 can render them:
   - Commit two small placeholder JPEGs to `fixtures/seed-mini-fridge.jpg` and `fixtures/seed-paperbacks.jpg`
-  - From the local machine, upload them: `pnpm wrangler r2 object put flea-market/<fridge-slug>/seed-1.jpg --file=./fixtures/seed-mini-fridge.jpg --content-type=image/jpeg --remote`, same for the paperback bundle. The `--remote` flag is required — current wrangler defaults R2 object operations to local Miniflare emulation, not the production bucket
+  - From the local machine, upload them: `pnpm wrangler r2 object put flea-market/<fridge-slug>/seed-1.jpg --file=./fixtures/seed-mini-fridge.jpg --content-type=image/jpeg --remote`, same for the paperback bundle. The `--remote` flag is required - current wrangler defaults R2 object operations to local Miniflare emulation, not the production bucket
   - Seed script attaches `photos: [{key: "<slug>/seed-1.jpg", alt: "..."}]` for those two items; the bicycle stays photoless to exercise the "no photo" rendering path in Step 6
   - Re-run `pnpm db:seed -- --force`
 
@@ -266,8 +266,8 @@ Verify:
 Pitfalls:
 
 - Image Transformations must be explicitly enabled per zone in the dashboard before `/cdn-cgi/image/` works; otherwise it 404s
-- Wrong `Cache-Control` on the `/images/$` response makes every transformation cache miss re-hit the Worker. Use `public, max-age=31536000, immutable` — Cloudflare's edge respects these the way browsers do
-- Large uploads have a Worker request size limit (100MB on the free plan). Phone photos are typically 5-10MB which fits, but Image Transformations only resizes for _serving_ — the original sits in R2 at full size. If admin uploads become tedious over cellular, add browser-side downscaling (canvas to ~2400px max) in step 8; not required now
+- Wrong `Cache-Control` on the `/images/$` response makes every transformation cache miss re-hit the Worker. Use `public, max-age=31536000, immutable` - Cloudflare's edge respects these the way browsers do
+- Large uploads have a Worker request size limit (100MB on the free plan). Phone photos are typically 5-10MB which fits, but Image Transformations only resizes for _serving_ - the original sits in R2 at full size. If admin uploads become tedious over cellular, add browser-side downscaling (canvas to ~2400px max) in step 8; not required now
 - Hardcoding `.jpg` for every upload silently mislabels PNG/HEIC; always derive the extension from `Content-Type`
 
 ## Step 6: Public list page and detail page
@@ -285,8 +285,8 @@ Foundation:
 
 Public pages:
 
-- `/` list page: `validateSearch` Zod schema for status / price / q / item filters persisted to URL (default-stripped — URL only carries non-default state); EN-translation fallback; client-side filter over the in-memory rows.
-- `/$slug/` detail page; back link is a plain `<Link to="/">`, no `history.back()` intercept (the previous entry could be cross-origin if the visitor arrived via an external link, and `canGoBack()` alone can't tell — see also the modal's `modalPushedBySessionRef` guard, which doesn't translate to a route that mounts fresh per navigation). Trade-off: title-click -> standalone -> back lands on `/` without the previous filter state, accepted to never walk visitors off-site. `throw notFound()` on unknown slugs.
+- `/` list page: `validateSearch` Zod schema for status / price / q / item filters persisted to URL (default-stripped - URL only carries non-default state); EN-translation fallback; client-side filter over the in-memory rows.
+- `/$slug/` detail page; back link is a plain `<Link to="/">`, no `history.back()` intercept (the previous entry could be cross-origin if the visitor arrived via an external link, and `canGoBack()` alone can't tell - see also the modal's `modalPushedBySessionRef` guard, which doesn't translate to a route that mounts fresh per navigation). Trade-off: title-click -> standalone -> back lands on `/` without the previous filter state, accepted to never walk visitors off-site. `throw notFound()` on unknown slugs.
 - Shared `DetailContent` component in `src/components/detail-content.tsx` rendered by both the standalone `$slug` route and the modal overlay; takes a serialized item + translation as props, owns the photo carousel and chrome (status banner, photo presentation). Wire shape is `DetailItem` (canonical type in that file); `serializeItem()` in `src/lib/serialize-item.ts` is the single Drizzle-row -> wire-shape converter used by both loaders.
 - `page-two.tsx` deleted; navigation stub served its purpose.
 
@@ -301,13 +301,13 @@ UI polish:
 - **Filter chips** rebuilt with shadcn `Button` (`variant="default" | "outline"`) plus `rounded-full` override to keep the chip shape. Filter rows wrap to one line on desktop and stack on mobile via flex-wrap.
 - **Language pill** rebuilt as shadcn `ButtonGroup` segmented control; full reload on click via raw `<a>` rendered through Base UI Button's `render` prop.
 - **Search input** wrapped in shadcn `InputGroup` with a `<SearchIcon>` addon.
-- **Empty state** via shadcn `Empty`: branches on `rows.length === 0` (catalog truly empty) vs `filtered.length === 0` (filters excluded everything) — only the second case shows the Reset button.
+- **Empty state** via shadcn `Empty`: branches on `rows.length === 0` (catalog truly empty) vs `filtered.length === 0` (filters excluded everything) - only the second case shows the Reset button.
 - **Dev fallback** in `optimizedImageUrl`: `import.meta.env.DEV` skips the `/cdn-cgi/image` prefix and returns the raw Worker proxy, since Miniflare doesn't emulate Cloudflare's edge image transformer.
 
 Known gaps deferred:
 
 - UI-chrome strings ("All", "Free", "No items match.", status labels) are English-only; bilingual UI strings are an architecture decision for a later step.
-- "Pasted `/?item=slug` in a fresh tab" shows the modal but with the unmasked URL — masks are per-navigation, not URL-derived. Functional but slightly ugly URL on that one edge case.
+- "Pasted `/?item=slug` in a fresh tab" shows the modal but with the unmasked URL - masks are per-navigation, not URL-derived. Functional but slightly ugly URL on that one edge case.
 
 Production verification deferred to the user's next deploy.
 
@@ -317,8 +317,8 @@ Tasks:
 
 - Decide the canonical URL form by setting `trailingSlash` on the TanStack Router config in `src/router.tsx`. TanStack Router's default is `'never'` (strip trailing slash on sub-routes), but Cloudflare Workers Static Assets defaults to `auto-trailing-slash` for the root, so `flea-market.akhdan.dev` will always 307 to `flea-market.akhdan.dev/`. Recommended: `trailingSlash: 'always'` for consistency between root and sub-routes (`/some-item/` instead of `/some-item`), matching Hugo's convention on the apex. Verify by curling `/some-item` (no slash) and confirming it 307s to `/some-item/`
 - Build `formatPrice(amount, currency)` and `MINOR_UNITS` constant in `src/lib/money.ts` per ARCHITECTURE.md (locale hardcoded to `'en'`)
-- Implement language resolution helper `src/lib/lang.server.ts` (the `.server.ts` suffix tells TanStack Start's bundler to refuse client imports — the module touches `getCookie` / `getRequestHeader` / `env`, which only exist server-side):
-  - `getLanguage()`: cookie `lang` -> `Accept-Language` parsing for `en`/`id` -> `env.DEFAULT_LANGUAGE`. Uses TanStack Start's `getCookie` and `getRequestHeader` from `@tanstack/react-start/server` — both read from request-scoped AsyncLocalStorage and throw outside a request context, so this function is only safe to call from server fn handlers, server route handlers, and route loaders
+- Implement language resolution helper `src/lib/lang.server.ts` (the `.server.ts` suffix tells TanStack Start's bundler to refuse client imports - the module touches `getCookie` / `getRequestHeader` / `env`, which only exist server-side):
+  - `getLanguage()`: cookie `lang` -> `Accept-Language` parsing for `en`/`id` -> `env.DEFAULT_LANGUAGE`. Uses TanStack Start's `getCookie` and `getRequestHeader` from `@tanstack/react-start/server` - both read from request-scoped AsyncLocalStorage and throw outside a request context, so this function is only safe to call from server fn handlers, server route handlers, and route loaders
   - Toggle endpoint at `/lang/$lang` that validates against `{en, id}`, sets the `lang` cookie (`Path=/`, 1-year `Max-Age`, `SameSite=Lax`, `Secure`, `HttpOnly`), and 302-redirects to a same-**origin** `Referer` (compare `URL.origin`, not hostname, to catch port/scheme mismatch) else `/`
 - Wire the resolved language end-to-end into the document shell:
   - Root loader in `src/routes/__root.tsx` calls a `createServerFn` returning `{ language: getLanguage() }`
@@ -328,7 +328,7 @@ Tasks:
   - Renders a grid of Cards: thumbnail (via `optimizedImageUrl(photos[0].key, { width: 400 })`), title, price, status badge
   - Status badge: `available` (green), `reserved` (yellow), `sold` (gray, item dimmed but still visible)
   - Filter controls: status (All / Available / Reserved / Sold) and price (All / Free / Paid)
-  - Filter state lives in URL search params via TanStack Router; define a `zod` schema for type-safe parsing. Install Zod 4 (latest stable); both Zod 3.24+ and 4 work with `validateSearch` directly via Standard Schema — no `@tanstack/zod-adapter` package needed
+  - Filter state lives in URL search params via TanStack Router; define a `zod` schema for type-safe parsing. Install Zod 4 (latest stable); both Zod 3.24+ and 4 work with `validateSearch` directly via Standard Schema - no `@tanstack/zod-adapter` package needed
   - Client-side search box: substring match on title/description (no server work)
   - Language toggle button (anchor to `/lang/id` or `/lang/en` depending on current state)
 - Detail page at `/$slug`:
