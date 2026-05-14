@@ -13,6 +13,10 @@ import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LangLangRouteImport } from './routes/lang/$lang'
 import { Route as ImagesSplatRouteImport } from './routes/images/$'
+import { Route as AdminLogoutRouteImport } from './routes/admin/logout'
+import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as AdminAuthRouteImport } from './routes/admin/_auth'
+import { Route as AdminAuthIndexRouteImport } from './routes/admin/_auth/index'
 import { Route as AdminApiUploadRouteImport } from './routes/admin/api/upload'
 
 const SlugRoute = SlugRouteImport.update({
@@ -35,6 +39,26 @@ const ImagesSplatRoute = ImagesSplatRouteImport.update({
   path: '/images/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLogoutRoute = AdminLogoutRouteImport.update({
+  id: '/admin/logout',
+  path: '/admin/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAuthRoute = AdminAuthRouteImport.update({
+  id: '/admin/_auth',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAuthIndexRoute = AdminAuthIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAuthRoute,
+} as any)
 const AdminApiUploadRoute = AdminApiUploadRouteImport.update({
   id: '/admin/api/upload',
   path: '/admin/api/upload',
@@ -44,42 +68,77 @@ const AdminApiUploadRoute = AdminApiUploadRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
+  '/admin': typeof AdminAuthRouteWithChildren
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
+  '/admin/': typeof AdminAuthIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
+  '/admin': typeof AdminAuthIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
+  '/admin/_auth': typeof AdminAuthRouteWithChildren
+  '/admin/login': typeof AdminLoginRoute
+  '/admin/logout': typeof AdminLogoutRoute
   '/images/$': typeof ImagesSplatRoute
   '/lang/$lang': typeof LangLangRoute
   '/admin/api/upload': typeof AdminApiUploadRoute
+  '/admin/_auth/': typeof AdminAuthIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$slug' | '/images/$' | '/lang/$lang' | '/admin/api/upload'
+  fullPaths:
+    | '/'
+    | '/$slug'
+    | '/admin'
+    | '/admin/login'
+    | '/admin/logout'
+    | '/images/$'
+    | '/lang/$lang'
+    | '/admin/api/upload'
+    | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$slug' | '/images/$' | '/lang/$lang' | '/admin/api/upload'
+  to:
+    | '/'
+    | '/$slug'
+    | '/admin/login'
+    | '/admin/logout'
+    | '/images/$'
+    | '/lang/$lang'
+    | '/admin/api/upload'
+    | '/admin'
   id:
     | '__root__'
     | '/'
     | '/$slug'
+    | '/admin/_auth'
+    | '/admin/login'
+    | '/admin/logout'
     | '/images/$'
     | '/lang/$lang'
     | '/admin/api/upload'
+    | '/admin/_auth/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SlugRoute: typeof SlugRoute
+  AdminAuthRoute: typeof AdminAuthRouteWithChildren
+  AdminLoginRoute: typeof AdminLoginRoute
+  AdminLogoutRoute: typeof AdminLogoutRoute
   ImagesSplatRoute: typeof ImagesSplatRoute
   LangLangRoute: typeof LangLangRoute
   AdminApiUploadRoute: typeof AdminApiUploadRoute
@@ -115,6 +174,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ImagesSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/logout': {
+      id: '/admin/logout'
+      path: '/admin/logout'
+      fullPath: '/admin/logout'
+      preLoaderRoute: typeof AdminLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_auth': {
+      id: '/admin/_auth'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_auth/': {
+      id: '/admin/_auth/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminAuthIndexRouteImport
+      parentRoute: typeof AdminAuthRoute
+    }
     '/admin/api/upload': {
       id: '/admin/api/upload'
       path: '/admin/api/upload'
@@ -125,9 +212,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminAuthRouteChildren {
+  AdminAuthIndexRoute: typeof AdminAuthIndexRoute
+}
+
+const AdminAuthRouteChildren: AdminAuthRouteChildren = {
+  AdminAuthIndexRoute: AdminAuthIndexRoute,
+}
+
+const AdminAuthRouteWithChildren = AdminAuthRoute._addFileChildren(
+  AdminAuthRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SlugRoute: SlugRoute,
+  AdminAuthRoute: AdminAuthRouteWithChildren,
+  AdminLoginRoute: AdminLoginRoute,
+  AdminLogoutRoute: AdminLogoutRoute,
   ImagesSplatRoute: ImagesSplatRoute,
   LangLangRoute: LangLangRoute,
   AdminApiUploadRoute: AdminApiUploadRoute,

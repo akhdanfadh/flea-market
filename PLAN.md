@@ -355,37 +355,29 @@ Pitfalls:
 
 ## Step 7: Admin auth
 
-**Goal**: Admin routes are protected by a token-cookie.
+**Status**: Done (2026-05-14).
 
-Tasks:
+Foundation:
 
-- `ADMIN_TOKEN` is already provisioned in Step 5 (used by the upload endpoint's Bearer auth). Reuse it here for the login form's password comparison. No new generation step
-- Generate cookie signing secret: `openssl rand -hex 32`. Store as `wrangler secret put COOKIE_SECRET`. Add to `.dev.vars`
-- Extend `src/lib/auth.ts` (created in Step 5 with `verifyToken` and `verifyBearer`):
-  - `signCookie(value: string, secret: string)`: HMAC-SHA256, returns `<value>.<hex-mac>`
-  - `verifyCookie(signedValue: string, secret: string)`: split on `.`, recompute MAC, constant-time compare, return value or null
-- Build the login flow:
-  - Route at `/admin/login` shows a single password input form
-  - POST handler calls `verifyToken(submittedPassword, env.ADMIN_TOKEN)`, sets `admin_session` cookie containing the signed literal `admin` with attributes per ARCHITECTURE.md #Admin auth: `HttpOnly`, `Secure`, `SameSite=Lax`, **`Path=/`**, `Max-Age=2592000` (30 days). Redirects to `/admin/`.
-  - Failed login returns 401 with generic error
-- Build a parent route loader at `/admin/` that runs before all admin routes (except login):
-  - Reads the cookie, verifies signature, redirects to `/login` if invalid
-- Update the upload endpoint (`src/routes/admin/api/upload.ts`): accept either the existing Bearer-token auth (for CLI/curl) OR a valid `admin_session` cookie (for the browser-based admin form in Step 8). Both paths converge on the same `ADMIN_TOKEN`
-- Add a logout button somewhere in the admin UI that POSTs to `/admin/logout` and clears the cookie (`Max-Age=0`, same `Path`)
+- `COOKIE_SECRET` generated via `openssl rand -hex 32`, set in `.dev.vars` and as a Worker secret. `src/types/env.d.ts` augments `Cloudflare.Env` with the new key.
+- `src/lib/auth.ts` renamed to `src/lib/auth.server.ts` (AGENTS.md §4 rule 4: explicit `*.server.ts` for modules touching `env` / `node:crypto`). Extended with `ADMIN_SESSION_COOKIE` constant, `signCookie` / `verifyCookie` (WebCrypto HMAC-SHA256 + `node:crypto.timingSafeEqual` on hex-decoded MACs), `buildSessionCookieHeader` / `clearSessionCookieHeader` (30-day session with `Secure` gated on request protocol, mirroring `src/routes/lang/$lang.ts`), and `hasAdminSession(request, secret)` for symmetry with `verifyBearer`.
 
-Verify:
+Routes:
 
-- Visiting `/admin/` while logged out redirects to login
-- Submitting the correct password sets a cookie and reaches the admin index
-- Submitting a wrong password shows the error
-- Logging out clears the cookie and re-redirects on next admin visit
-- Upload endpoint rejects unauthenticated requests with 401
+- `/admin/login/` (`src/routes/admin/login.tsx`): zod `validateSearch` for optional `?failed=yes`. `beforeLoad` calls a server fn that verifies the cookie and 302s to `/admin/` if already authed. Component renders a server-rendered `<form action="/admin/login/" method="POST">` with shadcn `Input` + `Label` + `Button`; the form shows "Invalid password." above the input when `failed === "yes"`. The sentinel value is the string `yes`, not `1`, because TanStack Router's default `parseSearchWith(JSON.parse)` JSON-parses each search value before `validateSearch` sees it - `?failed=1` would arrive as `Number(1)`, fail the literal-string schema, fall through `.catch(undefined)`, and get stripped on outbound URL canonicalization. `yes` is not valid JSON, so JSON.parse throws and the parser falls back to the raw string. `server.handlers.POST` parses `formData`, runs `verifyToken(password, env.ADMIN_TOKEN)`, and 302s to `/admin/login/?failed=yes` on miss (no `Set-Cookie`) or to `/admin/` with `Set-Cookie: admin_session=...` on match. **A literal 401 would leave the visitor on a blank Unauthorized page after a form POST; the 302+`?failed=yes` flow re-renders the form with the message inline.**
+- Pathless `/admin/_auth` layout (`src/routes/admin/_auth.tsx`): `beforeLoad` calls `requireAdminSession` (server fn reading `getCookie(ADMIN_SESSION_COOKIE)` + `verifyCookie`); throws `redirect({ to: '/admin/login/' })` on missing/invalid. Layout component renders an `Admin` header with a `<form action="/admin/logout/" method="POST">` log-out button, then `<Outlet />`. The pathless `_auth` shape guards everything under `_auth/` while leaving `login.tsx`, `logout.ts`, and `api/upload.ts` as un-guarded siblings.
+- `/admin/` placeholder (`src/routes/admin/_auth/index.tsx`): minimal page until Step 8 fills the CRUD table.
+- `/admin/logout/` (`src/routes/admin/logout.ts`): POST handler gated on a same-origin `Referer` (CSRF defense - SameSite=Lax doesn't block the _request_, only the cookie payload, and clearing a cookie doesn't need it sent). On a same-origin POST, 302s to `/admin/login/` with `clearSessionCookieHeader` as the `Set-Cookie`. Cross-origin / missing Referer falls through to `/`.
+- `/admin/api/upload` (`src/routes/admin/api/upload.ts`): auth now accepts Bearer (CLI/curl) **or** `admin_session` cookie (browser form in Step 8); both fail -> 401. Validation logic, slug check, MIME allow-list, and R2 put are unchanged from Step 5.
 
-Pitfalls:
+Production verification deferred to the user's next deploy: HTTPS-only `Secure` flag emits in prod, real cookie set + clear via Worker tail, full login -> /admin/ -> logout loop end-to-end.
 
-- SameSite=Strict breaks redirects from login. Use SameSite=Lax
-- A naive `===` comparison is a timing leak. Use the SHA-256 + `timingSafeEqual` approach
-- Cookie signing prevents tampering; without it, a leaked cookie value can be forged from another session
+Pitfalls baked in:
+
+- `SameSite=Strict` would break the redirect from the form POST. Both helpers emit `SameSite=Lax`.
+- Naive `===` on the submitted password leaks length via timing. `verifyToken` SHA-256s both sides and compares with `timingSafeEqual`; cookie verification length-checks then `timingSafeEqual` on the hex-decoded MACs.
+- Unsigned cookies can be forged. `signCookie` / `verifyCookie` HMAC-SHA256 with `COOKIE_SECRET`.
+- `HttpOnly` cookies are invisible to `document.cookie`, so all auth checks happen server-side via a `createServerFn` invocation rather than reading the cookie in `beforeLoad` directly.
 
 ## Step 8: Admin CRUD
 
@@ -427,6 +419,7 @@ Pitfalls:
 - Don't forget to delete R2 objects when an item is deleted, or you'll accumulate orphan photos
 - Abandoned creates leave orphan R2 keys (photos uploaded against a slug whose item row was never saved). Don't try to solve this with a staging-prefix scheme - at this scale, write a small GC script `scripts/gc-r2.ts` that lists every R2 key, lists every key referenced from `items.photos` in Turso, and deletes the diff. Run it manually every month or two. ~30 lines of code; not a step in this plan, just a tool to keep handy.
 - If the admin changes an item's slug after photos are already uploaded under the old slug, **do not rewrite R2 keys**. Photo `key` is stored per-photo in `items.photos`; the slug is just a URL handle. They're decoupled by design.
+- **`beforeLoad` does not guard server fns.** Step 7's `/admin/_auth` layout's `beforeLoad` only gates the route render; a `createServerFn` RPC endpoint is reachable by anyone who POSTs to it. Every mutating server fn added here (`createItem`, `updateItem`, `deleteItem`, image-related actions) must enforce auth at the handler. Promote `isAdminSession(getCookie(...), env.COOKIE_SECRET)` into a `createMiddleware` server check and chain it onto each mutating fn so the check lives in one place. `/admin/api/upload` is already self-authenticating and stays as-is.
 
 ## Step 9: Cart and contact flow
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
 
-import { verifyBearer } from "@/lib/auth.ts";
+import { hasAdminSession, verifyBearer } from "@/lib/auth.server.ts";
 
 const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -18,7 +18,16 @@ export const Route = createFileRoute("/admin/api/upload")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!(await verifyBearer(request, env.ADMIN_TOKEN))) {
+        // CSRF defense is layered rather than via a Referer guard: SameSite=Lax
+        // blocks the admin_session cookie on cross-site POST, the `image/*` MIME
+        // allow-list below means any cross-origin POST trips a CORS preflight
+        // (we don't send permissive CORS headers, so the preflight fails), and
+        // 415 rejects anything outside the allow-list. A cookieless Bearer
+        // attempt still requires the secret. No explicit Referer check needed.
+        const authed =
+          (await verifyBearer(request, env.ADMIN_TOKEN)) ||
+          (await hasAdminSession(request, env.COOKIE_SECRET));
+        if (!authed) {
           return new Response("Unauthorized", { status: 401 });
         }
 

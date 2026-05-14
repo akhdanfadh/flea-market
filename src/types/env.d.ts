@@ -6,6 +6,7 @@ declare namespace Cloudflare {
     TURSO_DATABASE_URL: string;
     TURSO_AUTH_TOKEN: string;
     ADMIN_TOKEN: string;
+    COOKIE_SECRET: string;
     BUCKET: R2Bucket;
     DEFAULT_LANGUAGE: string;
   }

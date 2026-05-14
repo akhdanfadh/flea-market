@@ -6,3 +6,13 @@
 
 TURSO_DATABASE_URL="libsql://flea-market-<account>.aws-ap-northeast-1.turso.io"
 TURSO_AUTH_TOKEN="<token from `turso db tokens create flea-market`>"
+
+# Admin password (used as Bearer for /admin/api/upload and as the password the
+# admin login form compares against). Generate locally: `openssl rand -hex 32`.
+# Set the same value in production via `wrangler secret put ADMIN_TOKEN`.
+ADMIN_TOKEN="<openssl rand -hex 32>"
+
+# HMAC key that signs the admin_session cookie. Rotate to invalidate every
+# currently-issued session. Generate locally: `openssl rand -hex 32`. Set the
+# same value in production via `wrangler secret put COOKIE_SECRET`.
+COOKIE_SECRET="<openssl rand -hex 32>"

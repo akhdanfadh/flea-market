@@ -224,24 +224,25 @@ Single-admin, token-in-cookie design.
 
 **Login flow**:
 
-1. `GET /admin/login` shows a single password input
-2. `POST /admin/login` compares submitted password to `env.ADMIN_TOKEN` using SHA-256 + `timingSafeEqual` (constant-time; `timingSafeEqual` is available under `nodejs_compat`)
+1. `GET /admin/login/` shows a single password input
+2. `POST /admin/login/` compares submitted password to `env.ADMIN_TOKEN` using SHA-256 + `timingSafeEqual` (constant-time; `timingSafeEqual` is available under `nodejs_compat`)
 3. On match, sets the `admin_session` cookie:
    - **Value**: the literal string `admin` HMAC-SHA256-signed with `env.COOKIE_SECRET` (format: `admin.<hex-mac>`)
-   - **Attributes**: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days)
-4. On mismatch, returns a 401 with a generic error
+   - **Attributes**: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=2592000` (30 days), plus `Secure` when the request is HTTPS. `Secure` is gated on the request protocol so the cookie still sets when dev is served over plain HTTP on a LAN IP (phone testing); browsers exempt `localhost` from the `Secure` requirement but not LAN IPs. Production is always HTTPS so `Secure` is always emitted there. Mirrors the `lang` cookie in `src/routes/lang/$lang.ts`.
+4. On mismatch, 302-redirects to `/admin/login/?failed=yes`; the route re-renders the form with an inline "Invalid password" message. The sentinel value is `yes` (not `1`) because TanStack Router's default `parseSearchWith(JSON.parse)` JSON-parses each search value before `validateSearch` sees it - `?failed=1` would arrive as `Number(1)`, fail the literal-string schema, fall through `.catch(undefined)`, and get stripped on outbound URL canonicalization. `yes` is not valid JSON, so JSON.parse throws and the parser preserves the raw string. A literal 401 here would leave the visitor on a blank Unauthorized page after a server-rendered form POST.
 
 The payload is intentionally a constant. A single-admin app has nothing per-session to encode; the signature is the only thing standing between a forged value and access. If you ever add a second person, evolve the payload to `{iat, v}` with a version field that lets you mass-invalidate without rotating the secret.
 
 **Authorization**:
 
-- All routes under `/admin/*` (except `/login`) require the cookie to validate
-- Validation happens in a parent route loader so it isn't repeated across handlers
-- Failed validation redirects to `/admin/login`
+- All routes under `/admin/*` (except `/admin/login/`, `/admin/logout/`, and `/admin/api/*`) require the cookie to validate
+- Validation happens in a pathless `/admin/_auth` layout's `beforeLoad` (via a `createServerFn` so `HttpOnly` cookies stay readable) so the check isn't repeated across handlers
+- Failed validation redirects to `/admin/login/`
+- `/admin/api/upload` keeps its own auth check that accepts either Bearer (CLI/curl) or the `admin_session` cookie (browser form), returning a real 401 rather than a 302
 
 **Logout**:
 
-- `POST /admin/logout` clears the cookie
+- `POST /admin/logout/` clears the cookie. The handler gates on a same-origin `Referer` to prevent a cross-site form-POST from force-clearing the admin's session (SameSite=Lax blocks the _cookie_ on a cross-site POST but doesn't block the _request_; clearing a cookie doesn't need the cookie to be sent). Mirrors the same-origin guard in `/lang/$lang`.
 
 **Revocation**:
 
