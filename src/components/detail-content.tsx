@@ -111,7 +111,13 @@ export function DetailContent({
                   <img
                     src={optimizedImageUrl(photo.key, { width: 1200 })}
                     alt={photo.alt ?? translation.title}
-                    className="aspect-square w-full rounded-md object-cover"
+                    // object-contain shows the full photo - the visitor is
+                    // deciding whether to buy and needs to see the whole item,
+                    // not a center-cropped slice. The square frame stays so the
+                    // carousel has no inter-slide layout shift and the PricePill
+                    // / StatusBanner stay anchored. Bars fall back to bg-muted,
+                    // matching the no-photo placeholder below.
+                    className="aspect-square w-full rounded-md bg-muted object-contain"
                   />
                 </CarouselItem>
               ))}

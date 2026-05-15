@@ -107,7 +107,11 @@ function SortablePhoto({
         <img
           src={optimizedImageUrl(photo.key, { width: 200 })}
           alt={photo.alt ?? ""}
-          className="aspect-square w-full rounded object-cover"
+          // object-contain so the admin sees the full frame they uploaded -
+          // a cropped thumbnail can hide whether the photo cuts off the
+          // item. Matches the detail/modal hero treatment; bars fall back
+          // to bg-muted.
+          className="aspect-square w-full rounded bg-muted object-contain"
         />
         {isFirst && (
           <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
