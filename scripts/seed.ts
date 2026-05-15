@@ -55,10 +55,10 @@ await db.insert(items).values([
     priceCurrency: "JPY",
     status: "available",
     photos: [
-      { key: `${fridgeId}/seed-1.jpg`, alt: "Two-door fridge front, closed" },
-      { key: `${fridgeId}/seed-2.jpg`, alt: "Both doors open, empty interior" },
-      { key: `${fridgeId}/seed-3.jpg`, alt: "Freezer compartment, top-down view" },
-      { key: `${fridgeId}/seed-4.jpg` },
+      { key: `${fridgeId}/seed-1.webp`, alt: "Two-door fridge front, closed" },
+      { key: `${fridgeId}/seed-2.webp`, alt: "Both doors open, empty interior" },
+      { key: `${fridgeId}/seed-3.webp`, alt: "Freezer compartment, top-down view" },
+      { key: `${fridgeId}/seed-4.webp` },
     ],
     createdAt: new Date("2026-05-12T10:00:00Z"),
   },
@@ -69,9 +69,9 @@ await db.insert(items).values([
     priceCurrency: "JPY",
     status: "sold",
     photos: [
-      { key: `${kotatsuId}/seed-1.jpg`, alt: "Kotatsu set up with futon draped" },
-      { key: `${kotatsuId}/seed-2.jpg`, alt: "Underside showing the heater unit" },
-      { key: `${kotatsuId}/seed-3.jpg` },
+      { key: `${kotatsuId}/seed-1.webp`, alt: "Kotatsu set up with futon draped" },
+      { key: `${kotatsuId}/seed-2.webp`, alt: "Underside showing the heater unit" },
+      { key: `${kotatsuId}/seed-3.webp` },
     ],
     createdAt: new Date("2026-04-22T09:00:00Z"),
   },
@@ -82,8 +82,8 @@ await db.insert(items).values([
     priceCurrency: "JPY",
     status: "reserved",
     photos: [
-      { key: `${bicycleId}/seed-1.jpg`, alt: "Mama-chari, side view" },
-      { key: `${bicycleId}/seed-2.jpg`, alt: "Rear child seat and shifter" },
+      { key: `${bicycleId}/seed-1.webp`, alt: "Mama-chari, side view" },
+      { key: `${bicycleId}/seed-2.webp`, alt: "Rear child seat and shifter" },
     ],
     createdAt: new Date("2026-05-10T15:00:00Z"),
   },
@@ -94,8 +94,8 @@ await db.insert(items).values([
     priceCurrency: null,
     status: "available",
     photos: [
-      { key: `${booksId}/seed-1.jpg`, alt: "Two stacks of paperbacks, spines out" },
-      { key: `${booksId}/seed-2.jpg`, alt: "Same books fanned out flat" },
+      { key: `${booksId}/seed-1.webp`, alt: "Two stacks of paperbacks, spines out" },
+      { key: `${booksId}/seed-2.webp`, alt: "Same books fanned out flat" },
     ],
     createdAt: new Date("2026-05-13T18:00:00Z"),
   },
@@ -106,11 +106,11 @@ await db.insert(items).values([
     priceCurrency: "JPY",
     status: "available",
     photos: [
-      { key: `${cookerId}/seed-1.jpg`, alt: "Rice cooker, front view on counter" },
-      { key: `${cookerId}/seed-2.jpg`, alt: "Lid open, inner pot visible" },
-      { key: `${cookerId}/seed-3.jpg`, alt: "Inner pot removed beside body" },
-      { key: `${cookerId}/seed-4.jpg`, alt: "Japanese-labelled control panel" },
-      { key: `${cookerId}/seed-5.jpg` },
+      { key: `${cookerId}/seed-1.webp`, alt: "Rice cooker, front view on counter" },
+      { key: `${cookerId}/seed-2.webp`, alt: "Lid open, inner pot visible" },
+      { key: `${cookerId}/seed-3.webp`, alt: "Inner pot removed beside body" },
+      { key: `${cookerId}/seed-4.webp`, alt: "Japanese-labelled control panel" },
+      { key: `${cookerId}/seed-5.webp` },
     ],
     createdAt: new Date("2026-05-14T12:00:00Z"),
   },
@@ -120,7 +120,7 @@ await db.insert(items).values([
     priceAmount: 3000,
     priceCurrency: "JPY",
     status: "draft",
-    photos: [{ key: `${deskId}/seed-1.jpg`, alt: "Partially assembled white desk" }],
+    photos: [{ key: `${deskId}/seed-1.webp`, alt: "Partially assembled white desk" }],
     createdAt: new Date("2026-05-15T08:00:00Z"),
   },
   {
@@ -133,8 +133,8 @@ await db.insert(items).values([
     priceCurrency: "USD",
     status: "available",
     photos: [
-      { key: `${jacketId}/seed-1.jpg`, alt: "Navy puffer jacket laid flat" },
-      { key: `${jacketId}/seed-2.jpg` },
+      { key: `${jacketId}/seed-1.webp`, alt: "Navy puffer jacket laid flat" },
+      { key: `${jacketId}/seed-2.webp` },
     ],
     createdAt: new Date("2026-04-30T11:00:00Z"),
   },
@@ -296,25 +296,25 @@ Harga dalam USD karena akan saya kirim ke teman di Berkeley kalau tidak ada pemb
 console.log(`Seeded 8 items and 13 translations into ${target}.`);
 
 const uploads: Array<{ key: string; file: string }> = [
-  { key: `${fridgeId}/seed-1.jpg`, file: "fixtures/seed-mini-fridge-1.jpg" },
-  { key: `${fridgeId}/seed-2.jpg`, file: "fixtures/seed-mini-fridge-2.jpg" },
-  { key: `${fridgeId}/seed-3.jpg`, file: "fixtures/seed-mini-fridge-3.jpg" },
-  { key: `${fridgeId}/seed-4.jpg`, file: "fixtures/seed-mini-fridge-4.jpg" },
-  { key: `${kotatsuId}/seed-1.jpg`, file: "fixtures/seed-kotatsu-1.jpg" },
-  { key: `${kotatsuId}/seed-2.jpg`, file: "fixtures/seed-kotatsu-2.jpg" },
-  { key: `${kotatsuId}/seed-3.jpg`, file: "fixtures/seed-kotatsu-3.jpg" },
-  { key: `${bicycleId}/seed-1.jpg`, file: "fixtures/seed-bicycle-1.jpg" },
-  { key: `${bicycleId}/seed-2.jpg`, file: "fixtures/seed-bicycle-2.jpg" },
-  { key: `${booksId}/seed-1.jpg`, file: "fixtures/seed-paperbacks-1.jpg" },
-  { key: `${booksId}/seed-2.jpg`, file: "fixtures/seed-paperbacks-2.jpg" },
-  { key: `${cookerId}/seed-1.jpg`, file: "fixtures/seed-rice-cooker-1.jpg" },
-  { key: `${cookerId}/seed-2.jpg`, file: "fixtures/seed-rice-cooker-2.jpg" },
-  { key: `${cookerId}/seed-3.jpg`, file: "fixtures/seed-rice-cooker-3.jpg" },
-  { key: `${cookerId}/seed-4.jpg`, file: "fixtures/seed-rice-cooker-4.jpg" },
-  { key: `${cookerId}/seed-5.jpg`, file: "fixtures/seed-rice-cooker-5.jpg" },
-  { key: `${deskId}/seed-1.jpg`, file: "fixtures/seed-malm-desk-1.jpg" },
-  { key: `${jacketId}/seed-1.jpg`, file: "fixtures/seed-jacket-1.jpg" },
-  { key: `${jacketId}/seed-2.jpg`, file: "fixtures/seed-jacket-2.jpg" },
+  { key: `${fridgeId}/seed-1.webp`, file: "fixtures/seed-mini-fridge-1.webp" },
+  { key: `${fridgeId}/seed-2.webp`, file: "fixtures/seed-mini-fridge-2.webp" },
+  { key: `${fridgeId}/seed-3.webp`, file: "fixtures/seed-mini-fridge-3.webp" },
+  { key: `${fridgeId}/seed-4.webp`, file: "fixtures/seed-mini-fridge-4.webp" },
+  { key: `${kotatsuId}/seed-1.webp`, file: "fixtures/seed-kotatsu-1.webp" },
+  { key: `${kotatsuId}/seed-2.webp`, file: "fixtures/seed-kotatsu-2.webp" },
+  { key: `${kotatsuId}/seed-3.webp`, file: "fixtures/seed-kotatsu-3.webp" },
+  { key: `${bicycleId}/seed-1.webp`, file: "fixtures/seed-bicycle-1.webp" },
+  { key: `${bicycleId}/seed-2.webp`, file: "fixtures/seed-bicycle-2.webp" },
+  { key: `${booksId}/seed-1.webp`, file: "fixtures/seed-paperbacks-1.webp" },
+  { key: `${booksId}/seed-2.webp`, file: "fixtures/seed-paperbacks-2.webp" },
+  { key: `${cookerId}/seed-1.webp`, file: "fixtures/seed-rice-cooker-1.webp" },
+  { key: `${cookerId}/seed-2.webp`, file: "fixtures/seed-rice-cooker-2.webp" },
+  { key: `${cookerId}/seed-3.webp`, file: "fixtures/seed-rice-cooker-3.webp" },
+  { key: `${cookerId}/seed-4.webp`, file: "fixtures/seed-rice-cooker-4.webp" },
+  { key: `${cookerId}/seed-5.webp`, file: "fixtures/seed-rice-cooker-5.webp" },
+  { key: `${deskId}/seed-1.webp`, file: "fixtures/seed-malm-desk-1.webp" },
+  { key: `${jacketId}/seed-1.webp`, file: "fixtures/seed-jacket-1.webp" },
+  { key: `${jacketId}/seed-2.webp`, file: "fixtures/seed-jacket-2.webp" },
 ];
 
 console.log(`Uploading fixture photos to ${isRemote ? "PROD" : "LOCAL"} R2:`);
@@ -323,7 +323,7 @@ try {
   for (const { key, file } of uploads) {
     try {
       const body = await readFile(file);
-      await r2.put(key, body, "image/jpeg");
+      await r2.put(key, body, "image/webp");
       console.log(`  ${key}`);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
