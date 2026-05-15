@@ -12,9 +12,20 @@ import { z } from "zod";
 import type { Currency, ItemPhoto } from "@/db/schema.ts";
 import type { ItemPayload } from "@/lib/item-schema.ts";
 
+import { ChangeStatusDialog } from "@/components/admin/change-status-dialog.tsx";
 import { PhotoDropzone } from "@/components/admin/photo-dropzone.tsx";
 import { PhotoGrid } from "@/components/admin/photo-grid.tsx";
 import { StatusSelect } from "@/components/admin/status-select.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -43,7 +54,6 @@ import { ITEM_NOT_FOUND_ERROR } from "@/lib/item-actions.ts";
 import { itemIdSchema, itemPayloadSchema } from "@/lib/item-schema.ts";
 import { MINOR_UNITS, isCurrency } from "@/lib/money.ts";
 import { generateUniqueSlug, withSlugErrorWrap } from "@/lib/slug.server.ts";
-import { STATUS_LABEL } from "@/lib/statuses.ts";
 import { useChangeStatus } from "@/lib/use-change-status.ts";
 
 type ItemForEdit = {
@@ -323,17 +333,18 @@ function EditItemPage() {
   const photos = (optimisticPhotos ?? loaderData.photos).filter((p) => !pendingRemovals.has(p.key));
 
   // Status uses the shared useChangeStatus hook (same machinery as the
-  // admin table row); the hook owns optimistic state + busy + the
-  // mutation+invalidate+toast choreography.
+  // admin table row). A click on a DropdownMenuItem stages the target via
+  // requestStatusChange; the AlertDialog rendered below confirms or cancels.
   const {
     status,
     busy: statusBusy,
-    change: changeStatus,
+    pendingTarget: pendingStatusTarget,
+    requestChange: requestStatusChange,
+    confirmChange: confirmStatusChange,
+    cancelChange: cancelStatusChange,
   } = useChangeStatus({
     id: loaderData.id,
     currentStatus: loaderData.status,
-    buildSuccessDescription: (prev, next) =>
-      `Changed from ${STATUS_LABEL[prev]} to ${STATUS_LABEL[next]}.`,
     refreshFailedTitle: "Status updated, but the page didn't refresh",
   });
 
@@ -439,26 +450,28 @@ function EditItemPage() {
     }
   }
 
-  async function onFormSubmit(payload: ItemPayload) {
-    const savePromise = updateItem({ data: { id: loaderData.id, payload } });
-    toast.promise(savePromise, {
-      loading: "Saving...",
-      success: (result) => ({
-        message: "Item updated",
-        description:
-          result.slug !== payload.slug
-            ? `Slug auto-suffixed to ${result.slug} (collision).`
-            : `Saved.`,
-      }),
-      error: (err: unknown) => ({
-        message: "Failed to save",
-        description: err instanceof Error ? err.message : String(err),
-      }),
-    });
+  // Save flow is gated by an AlertDialog ("just like delete" + status).
+  // RHF's onSubmit stashes the validated payload into pendingSave; the
+  // dialog reads pendingSave !== null as its `open` signal. Confirm fires
+  // performSave; cancel just clears pendingSave. No success toast - the
+  // dialog closing + the form's dirty rails clearing on form.reset are
+  // the signal. Errors still toast (the dialog has already closed by
+  // the time the rejection lands).
+  const [pendingSave, setPendingSave] = useState<ItemPayload | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function onFormSubmit(payload: ItemPayload) {
+    setPendingSave(payload);
+  }
+
+  async function performSave(payload: ItemPayload) {
     let result: { slug: string };
     try {
-      result = await savePromise;
-    } catch {
+      result = await updateItem({ data: { id: loaderData.id, payload } });
+    } catch (err) {
+      toast.error("Failed to save", {
+        description: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
     // Reset the form so the saved values become the new "clean" baseline.
@@ -480,14 +493,26 @@ function EditItemPage() {
           params: { slug: result.slug },
         });
       } catch {
-        // success toast already fired; admin can reload.
+        // Save landed server-side; admin can reload to see the new URL.
       }
     } else {
       try {
         await router.invalidate();
       } catch {
-        // metadata is saved server-side; the form holds the user's edits.
+        // Metadata is saved server-side; the form holds the user's edits.
       }
+    }
+  }
+
+  async function confirmSave() {
+    if (!pendingSave) return;
+    const payload = pendingSave;
+    setPendingSave(null);
+    setSaving(true);
+    try {
+      await performSave(payload);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -661,18 +686,43 @@ function EditItemPage() {
             status={status}
             canExitDraft={photos.length > 0}
             busy={statusBusy}
-            onChange={changeStatus}
+            onChange={requestStatusChange}
           />
           <Button
             type="submit"
             form="edit-item-form"
             size="sm"
-            disabled={form.formState.isSubmitting}
+            disabled={saving || form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? "Saving..." : "Save"}
+            {saving ? "Saving..." : "Save"}
           </Button>
         </div>
       </div>
+      <ChangeStatusDialog
+        pendingTarget={pendingStatusTarget}
+        currentStatus={status}
+        onConfirm={confirmStatusChange}
+        onCancel={cancelStatusChange}
+      />
+      <AlertDialog
+        open={pendingSave !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingSave(null);
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The edits will replace the current values for this item.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="bg-background">
+            <AlertDialogCancel variant="outline">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSave}>Save</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Photos</h3>

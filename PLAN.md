@@ -407,10 +407,16 @@ What landed:
   status-colored Button. Trigger sizes itself dynamically to the widest label
   via stacked `invisible aria-hidden` siblings inside a `grid text-left`; popup
   matches via `min-w-0` override of the default `min-w-32`. Current item shows
-  a right-aligned `CheckIcon`, disabled to prevent re-select. Optimistic UI:
-  click -> row.status flips immediately, `setItemStatus` server fn fires,
-  `router.invalidate()` re-fetches; on error, revert. Toast pair on success
-  ("Status updated" / `Changed from X to Y for "name"`) and on error.
+  a right-aligned `CheckIcon`, disabled to prevent re-select. Every status
+  change is gated by a shared `ChangeStatusDialog` (shadcn `AlertDialog`, same
+  pattern as delete): a click on a `DropdownMenuItem` stages the target in
+  `useChangeStatus.pendingTarget`; only after Confirm does the row flip
+  optimistically, `setItemStatus` server fn fire, and `router.invalidate()`
+  re-fetch. Cancel just closes the dialog. No success toast - the dialog
+  closing is the signal. Error toasts surface on mutation failure (revert
+  the optimistic flip); a separate warning toast covers "succeeded but
+  invalidate failed" (keep the optimistic flip so the UI matches the
+  server, ask the admin to reload).
 - Per-row **delete**: shadcn `AlertDialog` with `size="sm"`. Trigger is an
   outline Button with a `text-destructive` Trash2 icon (matches the Edit pencil
   Button visually inside a `ButtonGroup`; only the icon color signals the
@@ -420,7 +426,11 @@ What landed:
   `bg-muted/50` blends with the outline Button's `dark:bg-input/30` in Gruvbox
   dark). Dialog is **controlled** via `useState`-based `deleteOpen`; clicking
   Delete closes the dialog first so the exit animation runs before the row
-  unmounts via `router.invalidate()`.
+  unmounts via `router.invalidate()`. No success toast (the row vanishing
+  is the signal, matching the status/save pattern), but a `toast.loading`
+  bridges the dialog-close -> row-disappear gap since delete has no
+  optimistic UI; the loading toast dismisses on success or upgrades to an
+  error toast on failure.
 - **Pending skeleton** (`pendingMs: 200`, `pendingMinMs: 300`) mirroring the
   table layout so client-side nav (edit/new -> back) doesn't pop in cold.
   SSR-served first hits skip the skeleton entirely.
@@ -461,8 +471,15 @@ ReadonlyArray<ItemStatus>`) and a shared `STATUS_LABEL` map. Public search
   server-state photo section. Photos render from loader data with an
   `optimisticPhotos` overlay during in-flight mutations. Status changes
   go through the `StatusSelect` dropdown in the header (shared with the
-  admin table row) which calls `setItemStatus`; the metadata Save button
-  never changes status. Slug renames navigate to the new URL on save.
+  admin table row) which stages the target in `useChangeStatus.pendingTarget`
+  and renders the same `ChangeStatusDialog`; the metadata Save button
+  never changes status. Save itself is also gated by an `AlertDialog`:
+  RHF's `onSubmit` stashes the validated payload into `pendingSave`,
+  the dialog reads `pendingSave !== null` as its `open` signal, and
+  Confirm fires `updateItem` -> `form.reset` (so the dirty rails clear)
+  -> slug-aware navigate-or-invalidate. No success toast - the dialog
+  closing and the rails clearing are the signal; error toasts still
+  surface. Slug renames navigate to the new URL on save.
 - **Upload endpoint refactor** (`/admin/api/upload`): `?slug=` -> `?item=`;
   validates the item row exists before touching R2, generates UUID-prefixed
   key `<items.id>/<timestamp>-<rand>.<ext>`, appends to `items.photos`

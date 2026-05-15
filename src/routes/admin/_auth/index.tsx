@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { Currency, ItemPhoto, ItemStatus, Language } from "@/db/schema.ts";
 
+import { ChangeStatusDialog } from "@/components/admin/change-status-dialog.tsx";
 import { StatusSelect } from "@/components/admin/status-select.tsx";
 import {
   AlertDialog,
@@ -287,52 +288,55 @@ function AdminIndex() {
 function ItemRow({ row }: { row: AdminItemRow }) {
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Optimistic status reflects the click instantly so the colored trigger
-  // and the menu's check mark update without waiting on the round-trip.
+  // A click on a DropdownMenuItem stages the target via requestStatusChange;
+  // the AlertDialog rendered below confirms or cancels. Optimistic colored
+  // trigger and check mark only flip after confirm.
   const {
     status: displayStatus,
     busy: statusBusy,
-    change: changeStatus,
+    pendingTarget: pendingStatusTarget,
+    requestChange: requestStatusChange,
+    confirmChange: confirmStatusChange,
+    cancelChange: cancelStatusChange,
   } = useChangeStatus({
     id: row.id,
     currentStatus: row.status,
-    buildSuccessDescription: (prev, next) =>
-      `Changed from ${STATUS_LABEL[prev]} to ${STATUS_LABEL[next]} for "${row.title}"`,
     refreshFailedTitle: "Status updated, but the table didn't refresh",
   });
 
-  function confirmDelete() {
+  async function confirmDelete() {
     // Close the dialog first so its exit animation runs before the row
     // unmounts via router.invalidate(). Without this the dialog vanishes
     // mid-animation when the deleted row drops out of the loader data.
     setDeleteOpen(false);
-    // toast.promise bridges the dialog-close -> row-disappear gap with a
-    // visible "Deleting..." loading state. Delete has no optimistic UI
-    // (the row only goes away after invalidate refreshes the loader), so
-    // a loading toast is genuine feedback rather than a contradiction.
-    // NOTE: in the exotic case where deleteItem succeeds but router.invalidate
-    // rejects (e.g. session expired mid-request), the toast.error path fires
-    // with "Failed to delete item" even though the server-side delete landed.
-    // The row stays in the stale table until the next nav. Acceptable at
-    // single-admin scale; splitting the awaits to express this distinction is
-    // harder under toast.promise than under manual try/catch.
-    toast.promise(
-      (async () => {
-        await deleteItem({ data: { id: row.id } });
-        await router.invalidate();
-      })(),
-      {
-        loading: "Deleting item...",
-        success: {
-          message: "Item deleted",
-          description: `Removed "${row.title}"`,
-        },
-        error: (err: unknown) => ({
-          message: "Failed to delete item",
-          description: err instanceof Error ? err.message : String(err),
-        }),
-      },
-    );
+    // Loading toast bridges the dialog-close -> row-disappear gap;
+    // delete has no optimistic UI (the row only goes away after invalidate
+    // refreshes the loader), so without the loading toast the user would
+    // see ~one network round-trip of "nothing happened". No success toast -
+    // the row vanishing is the success signal, matching the status/save
+    // pattern. Two split awaits so a successful server delete followed by
+    // a refresh failure surfaces as a warning ("reload to see the latest
+    // state"), not as a misleading "Failed to delete item" - mirrors the
+    // status flow's split in useChangeStatus.
+    const toastId = toast.loading("Deleting item...");
+    try {
+      await deleteItem({ data: { id: row.id } });
+    } catch (err) {
+      toast.error("Failed to delete item", {
+        id: toastId,
+        description: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+    try {
+      await router.invalidate();
+      toast.dismiss(toastId);
+    } catch {
+      toast.warning("Item deleted, but the table didn't refresh", {
+        id: toastId,
+        description: "Reload to see the latest state.",
+      });
+    }
   }
 
   return (
@@ -379,7 +383,14 @@ function ItemRow({ row }: { row: AdminItemRow }) {
           status={displayStatus}
           canExitDraft={row.photos.length > 0}
           busy={statusBusy}
-          onChange={changeStatus}
+          onChange={requestStatusChange}
+        />
+        <ChangeStatusDialog
+          pendingTarget={pendingStatusTarget}
+          currentStatus={displayStatus}
+          itemTitle={row.title}
+          onConfirm={confirmStatusChange}
+          onCancel={cancelStatusChange}
         />
       </TableCell>
       <TableCell>
