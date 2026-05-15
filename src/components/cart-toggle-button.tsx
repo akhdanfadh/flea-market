@@ -88,10 +88,11 @@ export function CartToggleButton({
           // PricePill is bottom-left so the two chips balance across the
           // bottom of the photo. z-20 keeps the toggle above the Link overlay
           // at z-10 in the card structure.
-          "absolute right-2 bottom-2 z-20 inline-flex size-8 items-center justify-center rounded-full text-white shadow-md backdrop-blur-sm transition-colors",
+          "absolute right-2 bottom-2 z-20 inline-flex size-8 items-center justify-center rounded-full bg-black/50 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/70",
           // Same overlay family as PricePill / StatusBanner / the carousel
           // nav buttons in detail-content.tsx so the chrome reads as one set.
-          active ? "bg-emerald-600/85 hover:bg-emerald-600" : "bg-black/50 hover:bg-black/70",
+          // State is conveyed by the icon swap (cart → check), not color, so
+          // the green "Free" pill stays the only colored chip on the card.
         )}
       >
         {active ? <CheckIcon className="size-4" /> : <ShoppingCartIcon className="size-4" />}

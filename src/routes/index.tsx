@@ -30,6 +30,9 @@ import { optimizedImageUrl } from "@/lib/images.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
 import { PUBLIC_STATUSES, STATUS_LABEL } from "@/lib/statuses.ts";
+import { useHasMounted } from "@/lib/use-has-mounted.ts";
+import { cn } from "@/lib/utils.ts";
+import { useCart } from "@/stores/cart.ts";
 
 // Optional + catch(undefined) on every field is intentional: TanStack Router runs
 // validateSearch on outbound navigation as well as inbound, so any `.catch("all")`
@@ -325,67 +328,9 @@ function Home() {
         )
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {filtered.map(({ item, translation }) => (
-            <li key={item.id}>
-              <Card className="overflow-hidden pt-0 pb-4 transition hover:shadow-md">
-                {/* Photo area: the Link is an absolute overlay (z-10) covering
-                    the photo for clicks; the cart toggle is a sibling at z-20
-                    so its own clicks resolve before reaching the Link. This
-                    keeps the structure HTML-valid - nesting <button> inside
-                    <a> is disallowed by the spec and bites assistive tech.
-                    Plain click on the photo opens the in-place modal (via
-                    onCardClick's preventDefault). Cmd/middle/right-click on
-                    the photo falls through to the Link's /$slug/ href. */}
-                <div className="relative">
-                  {item.photos.length > 0 ? (
-                    <img
-                      src={optimizedImageUrl(item.photos[0]!.key, { width: 400 })}
-                      alt={item.photos[0]!.alt ?? translation.title}
-                      className="aspect-square w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-                      No photo
-                    </div>
-                  )}
-                  <StatusBanner status={item.status} />
-                  <PricePill amount={item.priceAmount} currency={item.priceCurrency} size="card" />
-                  <Link
-                    to="/$slug/"
-                    params={{ slug: item.slug }}
-                    onClick={onCardClick(item.slug)}
-                    // Photo click opens the modal (onClick preventDefault), so a
-                    // hover-preload of /$slug/'s loader would be discarded. The title
-                    // Link below keeps preload-on-intent because clicking it really
-                    // does navigate to the standalone page.
-                    preload={false}
-                    // The title Link in <CardHeader> below carries the accessible
-                    // name. Hiding this Link from a11y prevents a screen reader
-                    // from announcing the same title twice per card; tabIndex=-1
-                    // keeps it out of the keyboard tab order for the same reason.
-                    // Mouse / touch clicks still fire onClick and open the modal.
-                    aria-hidden
-                    tabIndex={-1}
-                    className="absolute inset-0 z-10"
-                  />
-                  <CartToggleButton slug={item.slug} status={item.status} variant="card" />
-                </div>
-                {/* Title: plain Link to the standalone /$slug/ page. No onClick
-                    intercept, so a regular click does an SPA nav to the full detail
-                    page (not the modal). Underlines on hover for affordance. */}
-                <CardHeader>
-                  <CardTitle className="line-clamp-2">
-                    <Link
-                      to="/$slug/"
-                      params={{ slug: item.slug }}
-                      className="underline-offset-4 hover:underline"
-                    >
-                      {translation.title}
-                    </Link>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
+          {filtered.map((row) => (
+            <li key={row.item.id}>
+              <ListCard row={row} onCardClick={onCardClick} />
             </li>
           ))}
         </ul>
@@ -434,6 +379,108 @@ function Home() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Per-row component so the cart subscription is scoped: a cart mutation only
+// re-renders the affected card (the one whose slug membership flipped),
+// not the entire list. Same hydration strategy as CartToggleButton - until
+// useHasMounted flips true the ring stays off, matching the SSR markup.
+function ListCard({
+  row,
+  onCardClick,
+}: {
+  row: Row;
+  onCardClick: (slug: string) => (e: React.MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  const { item, translation } = row;
+  const mounted = useHasMounted();
+  const inCart = useCart((s) => s.slugs.has(item.slug));
+  const selected = mounted && inCart;
+  return (
+    <Card
+      className={cn(
+        "relative overflow-hidden pt-0 pb-4 transition hover:shadow-md",
+        selected && "border-transparent ring-4 ring-primary",
+      )}
+    >
+      {/* Inner ring drawn on a separate overlay (not via inset-ring on the
+          Card) so it paints ABOVE the photo. Tailwind's inset-ring is an
+          inset box-shadow, which renders behind the element's child
+          content - the opaque <img> would hide it on the photo half of
+          the card. An absolutely-positioned overlay stacks above the
+          photo, so its inset box-shadow lands on top. z-30 keeps it above
+          the photo (img), the Link overlay (z-10), and the cart toggle
+          (z-20); pointer-events-none so it doesn't intercept clicks.
+          Always mounted (color toggles transparent <-> primary) so the
+          inset ring transitions in lockstep with the Card's outer ring;
+          conditional mount would pop in instantly while the outer ring
+          fades over 150ms. */}
+      <div
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute inset-0 z-30 rounded-[inherit] ring-4 ring-inset transition",
+          selected ? "ring-primary" : "ring-transparent",
+        )}
+      />
+      {/* Photo area: the Link is an absolute overlay (z-10) covering
+          the photo for clicks; the cart toggle is a sibling at z-20
+          so its own clicks resolve before reaching the Link. This
+          keeps the structure HTML-valid - nesting <button> inside
+          <a> is disallowed by the spec and bites assistive tech.
+          Plain click on the photo opens the in-place modal (via
+          onCardClick's preventDefault). Cmd/middle/right-click on
+          the photo falls through to the Link's /$slug/ href. */}
+      <div className="relative">
+        {item.photos.length > 0 ? (
+          <img
+            src={optimizedImageUrl(item.photos[0]!.key, { width: 400 })}
+            alt={item.photos[0]!.alt ?? translation.title}
+            className="aspect-square w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+            No photo
+          </div>
+        )}
+        <StatusBanner status={item.status} />
+        <PricePill amount={item.priceAmount} currency={item.priceCurrency} size="card" />
+        <Link
+          to="/$slug/"
+          params={{ slug: item.slug }}
+          onClick={onCardClick(item.slug)}
+          // Photo click opens the modal (onClick preventDefault), so a
+          // hover-preload of /$slug/'s loader would be discarded. The title
+          // Link below keeps preload-on-intent because clicking it really
+          // does navigate to the standalone page.
+          preload={false}
+          // The title Link in <CardHeader> below carries the accessible
+          // name. Hiding this Link from a11y prevents a screen reader
+          // from announcing the same title twice per card; tabIndex=-1
+          // keeps it out of the keyboard tab order for the same reason.
+          // Mouse / touch clicks still fire onClick and open the modal.
+          aria-hidden
+          tabIndex={-1}
+          className="absolute inset-0 z-10"
+        />
+        <CartToggleButton slug={item.slug} status={item.status} variant="card" />
+      </div>
+      {/* Title: plain Link to the standalone /$slug/ page. No onClick
+          intercept, so a regular click does an SPA nav to the full detail
+          page (not the modal). Underlines on hover for affordance. */}
+      <CardHeader>
+        <CardTitle className="line-clamp-2">
+          <Link
+            to="/$slug/"
+            params={{ slug: item.slug }}
+            className="underline-offset-4 hover:underline"
+          >
+            {translation.title}
+          </Link>
+        </CardTitle>
+      </CardHeader>
+    </Card>
   );
 }
 
