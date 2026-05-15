@@ -1,5 +1,5 @@
 import { SiLine, SiMessenger } from "@icons-pack/react-simple-icons";
-import { getRouteApi, useLocation } from "@tanstack/react-router";
+import { Link, getRouteApi, useLocation } from "@tanstack/react-router";
 import { AlertTriangleIcon, CopyIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -109,6 +109,7 @@ export function CartFab() {
           fbHandle={fbHandle}
           lineHandle={lineHandle}
           origin={origin}
+          onClose={() => setOpen(false)}
         />
       </SheetContent>
     </Sheet>
@@ -124,6 +125,7 @@ function CartSheetBody({
   fbHandle,
   lineHandle,
   origin,
+  onClose,
 }: {
   open: boolean;
   slugs: Set<string>;
@@ -131,6 +133,7 @@ function CartSheetBody({
   fbHandle: string;
   lineHandle: string;
   origin: string;
+  onClose: () => void;
 }) {
   const removeFromCart = useCart((s) => s.remove);
   const removeMany = useCart((s) => s.removeMany);
@@ -362,39 +365,53 @@ function CartSheetBody({
                 key={item.id}
                 className={`flex items-start gap-3 rounded-md border border-border p-2 ${isSold ? "opacity-60" : ""}`}
               >
-                <div className="size-16 shrink-0 overflow-hidden rounded-md bg-muted">
-                  {thumb ? (
-                    <img
-                      src={optimizedImageUrl(thumb.key, { width: 160 })}
-                      alt={thumb.alt ?? translation.title}
-                      className="size-full object-cover"
-                    />
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm font-medium">{translation.title}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        isFree ? "bg-green-700 text-white" : "bg-muted text-foreground"
-                      }`}
-                    >
-                      {item.priceAmount !== null && item.priceCurrency !== null
-                        ? formatPrice(item.priceAmount, item.priceCurrency)
-                        : "Free"}
-                    </span>
-                    {isSold ? (
-                      <span className="rounded-full bg-red-600/20 px-2 py-0.5 text-xs font-medium text-red-300">
-                        Sold
-                      </span>
-                    ) : null}
-                    {isReserved ? (
-                      <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-300">
-                        Reserved
-                      </span>
+                {/* Link wraps thumb + info so the whole row navigates to the
+                    standalone /$slug/ detail page. The standalone route works
+                    regardless of which page the visitor is on (the Sheet
+                    appears everywhere). The Remove button stays a sibling so
+                    its own clicks don't bubble into navigation. */}
+                <Link
+                  to="/$slug/"
+                  params={{ slug: item.slug }}
+                  onClick={onClose}
+                  className="group flex min-w-0 flex-1 items-start gap-3"
+                >
+                  <div className="size-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                    {thumb ? (
+                      <img
+                        src={optimizedImageUrl(thumb.key, { width: 160 })}
+                        alt={thumb.alt ?? translation.title}
+                        className="size-full object-cover"
+                      />
                     ) : null}
                   </div>
-                </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-medium underline-offset-4 group-hover:underline">
+                      {translation.title}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          isFree ? "bg-green-700 text-white" : "bg-muted text-foreground"
+                        }`}
+                      >
+                        {item.priceAmount !== null && item.priceCurrency !== null
+                          ? formatPrice(item.priceAmount, item.priceCurrency)
+                          : "Free"}
+                      </span>
+                      {isSold ? (
+                        <span className="rounded-full bg-red-600/20 px-2 py-0.5 text-xs font-medium text-red-300">
+                          Sold
+                        </span>
+                      ) : null}
+                      {isReserved ? (
+                        <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-300">
+                          Reserved
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </Link>
                 <button
                   type="button"
                   aria-label="Remove from cart"
