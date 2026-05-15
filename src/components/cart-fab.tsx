@@ -65,34 +65,39 @@ export function CartFab() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <Button
-            variant="default"
-            size="lg"
-            aria-label="Open cart"
-            // Sits clear of the footer band (16px viewport inset matches the
-            // footer's own p-4) and above any normal-flow content. z-40 stays
-            // below the Sheet overlay (z-50) so opening the drawer doesn't
-            // leave the FAB visible on top of the backdrop. Pill shape (auto
-            // width, h-14, pl-5/pr-6) reads as a labeled action rather than
-            // a generic icon; the wider hit target also lands cleaner under
-            // a thumb on mobile than a 56px circle.
-            className="fixed right-4 bottom-4 z-40 h-14 gap-2 rounded-full pr-6 pl-5 text-base font-semibold shadow-lg"
-          />
-        }
-      >
-        <ShoppingCartIcon className="size-6!" />
-        <span className="uppercase tracking-wide">Cart</span>
-        {count > 0 ? (
-          <span
-            aria-hidden
-            className="absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-destructive-foreground shadow"
-          >
-            {count}
-          </span>
-        ) : null}
-      </SheetTrigger>
+      {/* Centered, max-w-6xl-clamped wrapper so the FAB aligns to the
+          content edge on wide viewports instead of drifting to the far
+          screen edge. Matches the footer's max-w-6xl + p-4. The wrapper
+          is pointer-events-none so it doesn't intercept clicks across the
+          full bottom strip; the button re-enables pointer events on itself. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-6xl justify-end p-4">
+        <SheetTrigger
+          render={
+            <Button
+              variant="default"
+              size="lg"
+              aria-label="Open cart"
+              // z-40 stays below the Sheet overlay (z-50) so opening the
+              // drawer doesn't leave the FAB visible on top of the backdrop.
+              // Pill shape (auto width, h-14, pl-5/pr-6) reads as a labeled
+              // action rather than a generic icon; the wider hit target also
+              // lands cleaner under a thumb on mobile than a 56px circle.
+              className="pointer-events-auto relative h-14 gap-2 rounded-full pr-6 pl-5 text-base font-semibold shadow-xl/30"
+            />
+          }
+        >
+          <ShoppingCartIcon className="size-6!" />
+          <span className="uppercase tracking-wide">Cart</span>
+          {count > 0 ? (
+            <span
+              aria-hidden
+              className="absolute -top-1 -right-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive px-1.5 font-semibold text-destructive-foreground shadow"
+            >
+              {count}
+            </span>
+          ) : null}
+        </SheetTrigger>
+      </div>
       <SheetContent side="right" className="w-full gap-0 sm:max-w-md">
         <SheetHeader className="border-b">
           <SheetTitle>Your cart</SheetTitle>

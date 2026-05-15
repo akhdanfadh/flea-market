@@ -11,38 +11,35 @@ export function SiteFooter() {
 
   return (
     <footer>
-      <div className="mx-auto flex max-w-6xl items-center justify-between p-4 text-sm text-muted-foreground">
-        <span className="hidden sm:block sm:flex-1" aria-hidden />
-        <span className="sm:flex-1 sm:text-center">
-          &copy; {new Date().getFullYear()} Akhdan Fadhilah.
-        </span>
-        <span className="sm:flex-1 sm:text-right">
-          {onAuthedAdmin ? (
-            // Real POST form so SameSite=Lax cookie + Referer CSRF check on
-            // /admin/logout/ both apply; a Link would skip the Set-Cookie clear.
-            <form action="/admin/logout/" method="POST" className="inline-flex">
-              <button
-                type="submit"
-                aria-label="Log out"
-                className="inline-flex items-center hover:text-foreground"
-              >
-                <LogOutIcon className="size-3.5" />
-              </button>
-            </form>
-          ) : (
-            <Link
-              to="/admin/"
-              aria-label="Admin"
-              // preload={false} because the router has defaultPreload: "intent". Every
-              // anonymous hover would otherwise fire requireAdminSession's server-fn
-              // POST, surface admin existence in the network tab, and waste invocations.
-              preload={false}
+      <div className="mx-auto flex max-w-6xl items-center justify-start gap-2 p-4 text-sm text-muted-foreground sm:justify-center">
+        {/* Admin/logout sits inline-left of the copyright text because the
+            bottom-right slot is occupied by the cart FAB. */}
+        {onAuthedAdmin ? (
+          // Real POST form so SameSite=Lax cookie + Referer CSRF check on
+          // /admin/logout/ both apply; a Link would skip the Set-Cookie clear.
+          <form action="/admin/logout/" method="POST" className="inline-flex">
+            <button
+              type="submit"
+              aria-label="Log out"
               className="inline-flex items-center hover:text-foreground"
             >
-              <ShieldIcon className="size-3.5" />
-            </Link>
-          )}
-        </span>
+              <LogOutIcon className="size-3.5" />
+            </button>
+          </form>
+        ) : (
+          <Link
+            to="/admin/"
+            aria-label="Admin"
+            // preload={false} because the router has defaultPreload: "intent". Every
+            // anonymous hover would otherwise fire requireAdminSession's server-fn
+            // POST, surface admin existence in the network tab, and waste invocations.
+            preload={false}
+            className="inline-flex items-center hover:text-foreground"
+          >
+            <ShieldIcon className="size-3.5" />
+          </Link>
+        )}
+        <span>&copy; {new Date().getFullYear()} Akhdan Fadhilah.</span>
       </div>
     </footer>
   );
