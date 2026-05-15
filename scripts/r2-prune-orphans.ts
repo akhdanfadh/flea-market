@@ -27,10 +27,15 @@ for (const row of rows) {
   for (const p of row.photos) referenced.add(p.key);
 }
 
+// Keys under this prefix are deployer-managed static assets (e.g. the LINE
+// QR served at /images/static/line-qr.jpg). They aren't referenced from any
+// items.photos row, so the orphan filter would sweep them otherwise.
+const STATIC_PREFIX = "static/";
+
 const r2 = await openR2();
 try {
   const bucketKeys = await r2.list();
-  const orphans = bucketKeys.filter((k) => !referenced.has(k));
+  const orphans = bucketKeys.filter((k) => !referenced.has(k) && !k.startsWith(STATIC_PREFIX));
 
   console.log(
     `Bucket has ${bucketKeys.length} object(s), ${referenced.size} referenced by DB, ${orphans.length} orphan(s).`,

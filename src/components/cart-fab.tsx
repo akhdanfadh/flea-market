@@ -487,7 +487,7 @@ function CartSheetBody({
           </Button>
         </div>
         <img
-          src="/line-qr.jpg"
+          src="/images/static/line-qr.jpg"
           alt="LINE QR code"
           // loading="lazy" is defense in depth - Base UI's Dialog.Portal
           // doesn't render children when closed (no `keepMounted`), so the
