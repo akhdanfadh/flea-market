@@ -1,17 +1,22 @@
-/// <reference types="node" />
 import { drizzle } from "drizzle-orm/libsql";
 import { nanoid } from "nanoid";
+import { readFile } from "node:fs/promises";
 
 import { items, itemTranslations } from "../src/db/schema.ts";
 import { loadTursoEnv } from "./_env.ts";
+import { openR2 } from "./_r2.ts";
 
 const { url, authToken } = loadTursoEnv();
+const isRemote = process.env.DB_REMOTE === "1";
+const target = isRemote ? `PROD (${url})` : `LOCAL (${url})`;
 const db = drizzle({ connection: { url, authToken } });
 
+console.log(`Seeding into ${target}`);
+
 const existingCount = await db.$count(items);
-if (existingCount > 0 && !process.argv.includes("--force")) {
-  console.error(`Refusing to seed: items table already has ${existingCount} row(s).`);
-  console.error("Pass --force to wipe and reseed: pnpm db:seed -- --force");
+if (existingCount > 0 && isRemote && !process.argv.includes("--force")) {
+  console.error(`Refusing to seed PROD: items table already has ${existingCount} row(s).`);
+  console.error("Pass --force to wipe and reseed: DB_REMOTE=1 pnpm db:seed -- --force");
   process.exit(1);
 }
 
@@ -124,20 +129,32 @@ await db.insert(itemTranslations).values([
   },
 ]);
 
-console.log("Seeded 4 items and 7 translations.");
-console.log("");
-console.log("Upload fixture photos with:");
-console.log("");
+console.log(`Seeded 4 items and 7 translations into ${target}.`);
+
 const uploads: Array<{ key: string; file: string }> = [
   { key: `${fridgeId}/seed-1.jpg`, file: "fixtures/seed-mini-fridge.jpg" },
   { key: `${fridgeId}/seed-2.jpg`, file: "fixtures/seed-mini-fridge-2.jpg" },
   { key: `${booksId}/seed-1.jpg`, file: "fixtures/seed-paperbacks.jpg" },
   { key: `${kotatsuId}/seed-1.jpg`, file: "fixtures/seed-kotatsu.jpg" },
 ];
-for (const { key, file } of uploads) {
-  console.log(
-    `  pnpm wrangler r2 object put flea-market/${key} --file=${file} --content-type=image/jpeg --remote`,
-  );
+
+console.log(`Uploading fixture photos to ${isRemote ? "PROD" : "LOCAL"} R2:`);
+const r2 = await openR2();
+try {
+  for (const { key, file } of uploads) {
+    try {
+      const body = await readFile(file);
+      await r2.put(key, body, "image/jpeg");
+      console.log(`  ${key}`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        console.warn(`  skip ${key}: ${file} not found`);
+      } else {
+        console.error(`  failed: ${key}`);
+      }
+    }
+  }
+} finally {
+  await r2.dispose();
 }
-console.log("");
-console.log("Repeat with --local in place of --remote for Miniflare dev state.");
+console.log("Stale photos from previous seeds are not removed; run `pnpm r2:prune` to clean up.");

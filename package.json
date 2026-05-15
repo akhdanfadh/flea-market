@@ -6,6 +6,7 @@
     "build": "vite build",
     "cf-typegen": "wrangler types",
     "db:check": "node --no-warnings=ExperimentalWarning scripts/db-check.ts",
+    "db:local": "mkdir -p .turso && turso dev --db-file .turso/local.db",
     "db:push": "drizzle-kit push",
     "db:seed": "node --no-warnings=ExperimentalWarning scripts/seed.ts",
     "db:studio": "drizzle-kit studio",
@@ -17,6 +18,7 @@
     "lint:fix": "oxlint --fix .",
     "prepare": "lefthook install",
     "preview": "vite preview",
+    "r2:prune": "node --no-warnings=ExperimentalWarning scripts/r2-prune-orphans.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -59,6 +61,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1047.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@testing-library/dom": "^10.4.1",

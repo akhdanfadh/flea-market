@@ -1,18 +1,37 @@
 # Copy this file to .dev.vars and fill in real values.
 # .dev.vars is gitignored; never commit it.
 #
+# Local dev runs an isolated libSQL server via `pnpm db:local` (Turso CLI:
+# `turso dev --db-file .turso/local.db`). The defaults below point the app
+# and drizzle-kit at that local server.
+#
 # Production secrets are set separately via `wrangler secret put <NAME>`.
-# Keep .dev.vars and wrangler secrets in sync to avoid local/prod drift.
+# For schema/seed operations against the production Turso DB, create a
+# second gitignored file `.dev.vars.prod` with the prod URL + auth token,
+# then invoke `DB_REMOTE=1 pnpm db:push` (or db:seed / db:check / db:studio).
+# Keep `.dev.vars.prod` in sync with `wrangler secret` after any rotation.
 
-TURSO_DATABASE_URL="libsql://flea-market-<account>.aws-ap-northeast-1.turso.io"
-TURSO_AUTH_TOKEN="<token from `turso db tokens create flea-market`>"
+# Local libSQL server (started by `pnpm db:local`). drizzle-kit requires a
+# non-empty auth token even for local URLs; the local server accepts any
+# value when no JWT key is configured.
+TURSO_DATABASE_URL=http://127.0.0.1:8080
+TURSO_AUTH_TOKEN=local-unused
 
 # Admin password (used as Bearer for /admin/api/upload and as the password the
 # admin login form compares against). Generate locally: `openssl rand -hex 32`.
 # Set the same value in production via `wrangler secret put ADMIN_TOKEN`.
-ADMIN_TOKEN="<openssl rand -hex 32>"
+ADMIN_TOKEN=<openssl rand -hex 32>
 
 # HMAC key that signs the admin_session cookie. Rotate to invalidate every
 # currently-issued session. Generate locally: `openssl rand -hex 32`. Set the
 # same value in production via `wrangler secret put COOKIE_SECRET`.
-COOKIE_SECRET="<openssl rand -hex 32>"
+COOKIE_SECRET=<openssl rand -hex 32>
+
+# R2 credentials are only needed in .dev.vars.prod, and only by
+# `pnpm r2:prune` (scripts/r2-prune-orphans.ts). Create an R2 API token at
+# https://dash.cloudflare.com -> R2 -> Manage API tokens, with Object
+# Read+Write on the `flea-market` bucket. Leave unset locally.
+#R2_ACCOUNT_ID=
+#R2_ACCESS_KEY_ID=
+#R2_SECRET_ACCESS_KEY=
+#R2_BUCKET=flea-market

@@ -352,7 +352,25 @@ Client-side, no DB involvement.
 
 ### Local development (`.dev.vars`, gitignored)
 
-Same variables as above with development values; Wrangler loads automatically.
+`.dev.vars` points at a local libSQL server on `http://127.0.0.1:8080`,
+started by `pnpm db:local` (which wraps `turso dev --db-file .turso/local.db`).
+`TURSO_AUTH_TOKEN=local-unused` is a placeholder — drizzle-kit refuses an
+empty value, but the local server accepts any token. Wrangler loads
+`.dev.vars` automatically into Miniflare; drizzle-kit and the helper scripts
+read it via `process.loadEnvFile`.
+
+For schema/seed operations against the production Turso DB, populate a
+separate gitignored `.dev.vars.prod` with the real URL + auth token and prefix
+the command with `DB_REMOTE=1`. The running Worker never reads this file; it
+exists solely as the prod-credential source for drizzle-kit and the helper
+scripts (`scripts/_env.ts`, `scripts/r2-prune-orphans.ts`). `r2:prune`
+runs in both modes. Locally it uses `getPlatformProxy` from `wrangler` to
+talk to Miniflare's R2 binding (stop `pnpm dev` first to avoid
+`.wrangler/state` lock contention). With `DB_REMOTE=1` it switches to the
+S3 API and additionally requires `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and
+`R2_SECRET_ACCESS_KEY` from `.dev.vars.prod` (R2 API token, Object Read &
+Write). `pnpm db:seed` auto-uploads the fixture JPEGs to whichever R2
+matches the DB target.
 
 ## Deployment
 

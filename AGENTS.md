@@ -148,21 +148,38 @@ fetches current docs and avoids stale training data.
 
 ## 5) Secrets and Local Dev
 
-1. Never commit secrets. `ADMIN_TOKEN`, `COOKIE_SECRET`, `TURSO_DATABASE_URL`, and
-   `TURSO_AUTH_TOKEN` live in `wrangler secret` for production and `.dev.vars` for
-   local - `.dev.vars` is gitignored.
-2. Keep `.dev.vars` and `wrangler secret` in sync. Silent divergence between local
-   and prod is the most common foot-gun in this stack.
-3. Two distinct rotations:
+1. Never commit secrets. Three gitignored locations carry them:
+   - `.dev.vars` (local): `ADMIN_TOKEN`, `COOKIE_SECRET`, and the local Turso
+     URL/token (`http://127.0.0.1:8080` + `local-unused`).
+   - `.dev.vars.prod` (drizzle-kit/scripts only, never read by the running
+     Worker): the real Turso URL + auth token, and the R2 API token
+     credentials (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`).
+   - `wrangler secret` (Worker runtime in production): `ADMIN_TOKEN`,
+     `COOKIE_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`.
+2. Local dev points at a **local** libSQL instance, not prod. `.dev.vars` carries
+   `TURSO_DATABASE_URL=http://127.0.0.1:8080` and `TURSO_AUTH_TOKEN=local-unused`.
+   The server is started by `pnpm db:local` (`turso dev --db-file .turso/local.db`).
+   The auth token is a placeholder because drizzle-kit rejects an empty value,
+   but the local server accepts any token when no JWT key is configured.
+   Schema/seed/check operations against prod require an explicit opt-in: prefix
+   with `DB_REMOTE=1` (e.g. `DB_REMOTE=1 pnpm db:push`; also `db:seed`,
+   `db:check`, `db:studio`). `r2:prune` is dual-mode — defaults to local R2,
+   takes `DB_REMOTE=1` to target prod. Both `drizzle.config.ts` and
+   `scripts/_env.ts` honor the flag.
+3. Keep `.dev.vars.prod` and `wrangler secret` in sync. Silent divergence
+   between the file used by drizzle-kit and the secrets used by the running
+   Worker is the most common foot-gun in this stack.
+4. Two distinct rotations:
    - Rotate `ADMIN_TOKEN` if the admin password is suspected leaked. This blocks
      future logins with the old password but does _not_ invalidate already-issued
      session cookies (they're signed with `COOKIE_SECRET`).
    - Rotate `COOKIE_SECRET` to invalidate all currently-issued sessions. The next
      request from any existing session will fail signature verification and be
      redirected to login.
-4. Dev server is `pnpm dev` (Vite + `@cloudflare/vite-plugin` running Miniflare).
-   That gives you real R2/KV/env bindings from `.dev.vars` and `wrangler.jsonc`. Do
-   not run `wrangler dev` separately.
+5. Dev server is `pnpm dev` (Vite + `@cloudflare/vite-plugin` running Miniflare).
+   That gives you real R2/KV/env bindings from `.dev.vars` and `wrangler.jsonc`.
+   Run `pnpm db:local` in a second terminal so the libSQL server is up before
+   `pnpm dev` issues queries. Do not run `wrangler dev` separately.
 
 ## 6) Tooling
 
@@ -173,8 +190,8 @@ fetches current docs and avoids stale training data.
 4. Git hooks via `lefthook` (only if/when one is genuinely needed; do not add hooks
    speculatively).
 5. Standard scripts in `package.json`: `dev`, `build`, `deploy`, `typecheck`, `lint`,
-   `lint:fix`, `format`, `format:fix`, `db:push`, `db:studio`, `db:seed`,
-   `cf-typegen`.
+   `lint:fix`, `format`, `format:fix`, `db:local`, `db:push`, `db:studio`,
+   `db:seed`, `db:check`, `r2:prune`, `cf-typegen`.
 
 ## 7) What This App Will Not Become
 
