@@ -27,13 +27,14 @@ ADMIN_TOKEN=<openssl rand -hex 32>
 # same value in production via `wrangler secret put COOKIE_SECRET`.
 COOKIE_SECRET=<openssl rand -hex 32>
 
-# Contact-link surfaces shown on the cart's contact panel. `wrangler.jsonc`
-# `vars` ships placeholders so the repo doesn't broadcast real handles; the
-# values below override them locally (Miniflare reads .dev.vars over `vars`).
-# Set the same values in production via `wrangler secret put FB_HANDLE` and
-# `wrangler secret put LINE_HANDLE`. Display URLs minus protocol.
-# LINE_HANDLE pairs with a static QR object in R2 at `static/line-qr.jpg`;
-# upload yours via `wrangler r2 object put` (see OPERATIONS.md step 6).
+# Contact-link surfaces shown on the cart's contact panel. Set here locally
+# (Miniflare reads .dev.vars) and via `wrangler secret put FB_HANDLE` /
+# `wrangler secret put LINE_HANDLE` in production. NOT declared in
+# wrangler.jsonc `vars` because Cloudflare rejects a vars+secret binding
+# name conflict; secrets are the sole source.
+# Display URLs minus protocol. LINE_HANDLE pairs with a static QR object
+# in R2 at `static/line-qr.jpg`; upload yours via `wrangler r2 object put`
+# (see OPERATIONS.md step 6).
 FB_HANDLE=m.me/your-handle
 LINE_HANDLE=line.me/ti/p/your-line-id
 

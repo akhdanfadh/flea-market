@@ -311,7 +311,7 @@ The gate is enforced at two layers: the `StatusSelect` dropdown disables the pub
 
 Client-side, no DB involvement.
 
-**State**: a Zustand store holds `Set<itemSlug>` in memory and persists to `localStorage` under key `flea-market:cart` as `string[]` (asymmetric in/on-disk shape avoids pulling in `superjson` for a one-off `Set` round-trip). The conversion uses Zustand's `partialize` (Set → array on write) + `merge` (array → Set on rehydrate); `persist`'s older `serialize`/`deserialize` options are deprecated. Rehydration is gated by `useHasMounted` so SSR + persist don't disagree on the FAB count. The store keys items by `slug`, not `id` - slugs are admin-editable, so a slug rename silently drops the row from any cart that still holds the old value (acceptable at single-admin scale). A hard `CART_LIMIT = 50` in `src/lib/cart-constants.ts` is shared with the server fn's Zod validator. Cross-tab sync is not wired (Zustand `persist` v5 doesn't subscribe to the `storage` event); two tabs of the public site drift their cart state until reload.
+**State**: a Zustand store holds `Set<itemSlug>` in memory and persists to `localStorage` under key `flea-market:cart` as `string[]` (asymmetric in/on-disk shape avoids pulling in `superjson` for a one-off `Set` round-trip). The conversion uses Zustand's `partialize` (Set -> array on write) + `merge` (array -> Set on rehydrate); `persist`'s older `serialize`/`deserialize` options are deprecated. Rehydration is gated by `useHasMounted` so SSR + persist don't disagree on the FAB count. The store keys items by `slug`, not `id` - slugs are admin-editable, so a slug rename silently drops the row from any cart that still holds the old value (acceptable at single-admin scale). A hard `CART_LIMIT = 50` in `src/lib/cart-constants.ts` is shared with the server fn's Zod validator. Cross-tab sync is not wired (Zustand `persist` v5 doesn't subscribe to the `storage` event); two tabs of the public site drift their cart state until reload.
 
 **UI**:
 
@@ -349,26 +349,26 @@ Client-side, no DB involvement.
     "DEFAULT_CURRENCY": "JPY",
     "SUPPORTED_CURRENCIES": "JPY,IDR,USD",
     "DEFAULT_LANGUAGE": "en",
-    // Display URLs minus protocol. Placeholders in vars; the deployer
-    // overrides via `wrangler secret put FB_HANDLE` / `wrangler secret put
-    // LINE_HANDLE` so real handles never land in the repo. The cart drawer
-    // renders these verbatim and prepends https:// when opening the new tab.
-    // LINE_HANDLE pairs with a static QR object at `static/line-qr.jpg` in
-    // R2 (served via `/images/static/line-qr.jpg`); see OPERATIONS.md.
-    "FB_HANDLE": "m.me/your-handle",
-    "LINE_HANDLE": "line.me/ti/p/your-line-id",
+    // FB_HANDLE / LINE_HANDLE are set via `wrangler secret put` (prod)
+    // and .dev.vars (local), not declared here - Cloudflare rejects a
+    // vars+secret binding name conflict. Cart drawer reads them as
+    // env.FB_HANDLE / env.LINE_HANDLE. LINE_HANDLE pairs with a static
+    // QR object in R2 at `static/line-qr.jpg` (served via
+    // `/images/static/line-qr.jpg`); see OPERATIONS.md.
   },
 }
 ```
 
 ### Secrets (set via `wrangler secret put`, never in repo)
 
-| Name                 | Source                 |
-| -------------------- | ---------------------- |
-| `ADMIN_TOKEN`        | `openssl rand -hex 32` |
-| `COOKIE_SECRET`      | `openssl rand -hex 32` |
-| `TURSO_DATABASE_URL` | Turso dashboard        |
-| `TURSO_AUTH_TOKEN`   | Turso dashboard        |
+| Name                 | Source                                             |
+| -------------------- | -------------------------------------------------- |
+| `ADMIN_TOKEN`        | `openssl rand -hex 32`                             |
+| `COOKIE_SECRET`      | `openssl rand -hex 32`                             |
+| `TURSO_DATABASE_URL` | Turso dashboard                                    |
+| `TURSO_AUTH_TOKEN`   | Turso dashboard                                    |
+| `FB_HANDLE`          | Display URL minus protocol (e.g. `m.me/handle`)    |
+| `LINE_HANDLE`        | Display URL minus protocol (e.g. `line.me/ti/p/…`) |
 
 ### Local development (`.dev.vars`, gitignored)
 

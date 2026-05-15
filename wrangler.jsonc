@@ -9,16 +9,14 @@
   "vars": {
     "DEFAULT_LANGUAGE": "en",
     "DEFAULT_CURRENCY": "JPY",
-    // Display URLs minus protocol. The cart drawer shows these verbatim on
-    // the contact buttons and prepends https:// when opening the link.
-    // Placeholders here; the deployer overrides these with their real
-    // contact handles via `wrangler secret put FB_HANDLE` /
-    // `wrangler secret put LINE_HANDLE`. See OPERATIONS.md.
-    // LINE_HANDLE pairs with a static QR object in R2 at key
-    // `static/line-qr.jpg` (served via `/images/static/line-qr.jpg`); upload
-    // your own QR there before deploy.
-    "FB_HANDLE": "m.me/your-handle",
-    "LINE_HANDLE": "line.me/ti/p/your-line-id",
+    // FB_HANDLE and LINE_HANDLE come from `wrangler secret put` in
+    // production and from .dev.vars locally - not from vars, because
+    // Cloudflare rejects a vars+secret binding name conflict. Cart drawer
+    // reads them as env.FB_HANDLE / env.LINE_HANDLE (display URLs minus
+    // protocol, e.g. m.me/your-handle). LINE_HANDLE pairs with a static
+    // QR object in R2 at key `static/line-qr.jpg` (served via
+    // `/images/static/line-qr.jpg`); upload your own before deploy.
+    // See OPERATIONS.md.
   },
   // Match the implicit defaults when `routes` is set, but state them
   // explicitly so `wrangler deploy` doesn't emit a warning on every run.
