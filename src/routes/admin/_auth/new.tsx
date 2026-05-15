@@ -2,6 +2,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { ChevronLeftIcon } from "lucide-react";
+import { nanoid } from "nanoid";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -33,7 +34,7 @@ const createDraftItem = createServerFn({ method: "POST" })
   .inputValidator(draftItemPayloadSchema)
   .handler(async ({ data }): Promise<{ slug: string }> => {
     const db = getDb();
-    const id = crypto.randomUUID();
+    const id = nanoid(12);
 
     // Schema default for status is "available"; drafts opt in explicitly.
     // The translation schema already .trim()s as a transform, so values

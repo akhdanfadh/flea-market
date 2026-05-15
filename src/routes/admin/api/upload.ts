@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 import type { ItemPhoto } from "@/db/schema.ts";
 
 import { getDb } from "@/db/client.ts";
 import { items } from "@/db/schema.ts";
 import { hasAdminSession, verifyBearer } from "@/lib/auth.server.ts";
-import { ITEM_ID_PATTERN } from "@/lib/item-schema.ts";
+import { itemIdSchema } from "@/lib/item-schema.ts";
 
 const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -43,10 +44,11 @@ export const Route = createFileRoute("/admin/api/upload")({
         }
 
         const url = new URL(request.url);
-        const itemId = url.searchParams.get("item");
-        if (!itemId || !ITEM_ID_PATTERN.test(itemId)) {
+        const itemIdParse = itemIdSchema.safeParse(url.searchParams.get("item"));
+        if (!itemIdParse.success) {
           return new Response("Invalid or missing item id", { status: 400 });
         }
+        const itemId = itemIdParse.data;
 
         const contentType = request.headers.get("content-type") ?? "";
         const ext = EXT_BY_CONTENT_TYPE[contentType];
@@ -92,7 +94,7 @@ export const Route = createFileRoute("/admin/api/upload")({
           return new Response("Payload too large", { status: 413 });
         }
 
-        const key = `${itemId}/${Date.now()}-${randomHex(4)}.${ext}`;
+        const key = `${itemId}/${nanoid(8)}.${ext}`;
         await env.BUCKET.put(key, body, {
           httpMetadata: { contentType },
         });
@@ -112,12 +114,6 @@ export const Route = createFileRoute("/admin/api/upload")({
     },
   },
 });
-
-function randomHex(byteCount: number): string {
-  const bytes = new Uint8Array(byteCount);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 // Streams the request body into memory with a hard byte cap. Returns the
 // concatenated bytes on success, or null if the running total exceeded

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { nanoid } from "nanoid";
 
 // `draft` is the admin-only working state - items live here while the admin
 // is wiring up photos, prices, descriptions. Public loaders explicitly
@@ -24,7 +25,7 @@ export const items = sqliteTable(
   {
     id: text("id")
       .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
+      .$defaultFn(() => nanoid(12)),
     slug: text("slug").notNull().unique(),
     priceAmount: integer("price_amount"),
     priceCurrency: text("price_currency", { enum: CURRENCIES }),

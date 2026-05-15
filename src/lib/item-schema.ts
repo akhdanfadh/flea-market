@@ -3,13 +3,15 @@ import { z } from "zod";
 import { CURRENCIES } from "@/db/schema.ts";
 import { SLUG_PATTERN } from "@/lib/slug.ts";
 
-// Item id is a UUID generated server-side inside createDraftItem
-// (`crypto.randomUUID()`). The pattern accepts hex + hyphens within a
-// 1-64 char window so the upload endpoint can refuse path-traversal-y
-// shapes before constructing an R2 key, and server fns get the same
-// shape check at their input boundary. The existence check in each
-// handler is what ultimately matters - mistyped ids 404 either way.
-export const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+// Item id is a 12-char nanoid generated server-side inside
+// createDraftItem and as the schema default on items.id. The pattern
+// accepts the nanoid URL-safe alphabet (which is a superset of UUID
+// hex+hyphens) within an 8-64 char window so the upload endpoint can
+// refuse path-traversal-y shapes before constructing an R2 key, and
+// server fns get the same shape check at their input boundary. The
+// window is intentionally loose - the existence check in each handler
+// is what ultimately matters; mistyped ids 404 either way.
+export const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
 export const itemIdSchema = z.string().regex(ITEM_ID_PATTERN, "Invalid item id");
 
 // Minimal payload for "Save draft" on the new-item page. EN translation is
