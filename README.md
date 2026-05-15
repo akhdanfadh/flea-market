@@ -2,7 +2,25 @@
 
 A secondhand-listing app live at **<https://flea-market.akhdan.dev>**. Single-admin CRUD, public browse plus a cart-to-contact flow, bilingual content (English required, Indonesian optional).
 
-> **This repo is my personal deployment, open-sourced for transparency.** The committed branding, domain, seed copy, and logo/favicon assets are mine. Feel free to read, learn from, or fork the code — if you fork to run your own instance, see [`OPERATIONS.md`](./OPERATIONS.md) for the parts that need swapping (contact handles, LINE QR, logo, favicons, site title, deploy domain).
+> **This repo is my personal deployment, open-sourced for transparency.** The committed branding, domain, seed copy, and logo/favicon assets are mine. Feel free to read, learn from, or fork the code - if you fork to run your own instance, see [`OPERATIONS.md`](./OPERATIONS.md) for the parts that need swapping (contact handles, LINE QR, logo, favicons, site title, deploy domain).
+
+<img src="./docs/screenshots/home.webp" alt="Catalog (desktop)" width="640" />
+<img src="./docs/screenshots/home-mobile.webp" alt="Catalog (mobile)" width="200" />
+
+<details>
+<summary>See more screenshots</summary>
+
+![Modal over list](./docs/screenshots/modal.webp)
+
+![Cart drawer with mixed-currency items](./docs/screenshots/cart.webp)
+
+**Admin** (not reachable without auth) - single-admin CRUD.
+
+![Admin items table](./docs/screenshots/admin-index.webp)
+
+![Admin edit page](./docs/screenshots/admin-edit.webp)
+
+</details>
 
 ## Stack
 
@@ -36,7 +54,7 @@ DB_REMOTE=1 pnpm r2:prune             # list orphan R2 objects (dry run by defau
 DB_REMOTE=1 pnpm r2:prune -- --apply  # delete listed orphans
 ```
 
-`r2:prune` works against both local and prod. Without `DB_REMOTE=1` it uses Miniflare's local R2 via `getPlatformProxy` — stop `pnpm dev` first to avoid `.wrangler/state` lock contention. With `DB_REMOTE=1`, it hits prod R2 via the S3 API and needs R2 API token credentials in `.dev.vars.prod` (see comments in `.dev.vars.example`).
+`r2:prune` works against both local and prod. Without `DB_REMOTE=1` it uses Miniflare's local R2 via `getPlatformProxy` - stop `pnpm dev` first to avoid `.wrangler/state` lock contention. With `DB_REMOTE=1`, it hits prod R2 via the S3 API and needs R2 API token credentials in `.dev.vars.prod` (see comments in `.dev.vars.example`).
 
 `pnpm db:seed` now auto-uploads the fixture JPEGs to whichever R2 matches the DB target (`--local` or `--remote`). Old keys from previous seeds stick around as orphans until you run `pnpm r2:prune`.
 
