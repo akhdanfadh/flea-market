@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { ImageIcon, LanguagesIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -64,12 +64,20 @@ const getAdminItems = createServerFn({ method: "GET" })
   .middleware([requireAdmin])
   .handler(async (): Promise<AdminItemRow[]> => {
     const db = getDb();
-    // Sort by updatedAt so "recently worked on" surfaces first. Drizzle's
-    // $onUpdate fires for every mutation - including photo reorder/alt-text
-    // edits via the per-photo server fns - so fixing a typo on alt text
-    // shuffles the row to the top. Intentional: alt edits ARE working on
-    // the item; consistent treatment beats trying to classify "real" edits.
-    const rows = await db.select().from(items).orderBy(desc(items.updatedAt));
+    // Drafts pinned to the top - unfinished work always wants attention.
+    // Within each group, sort by updatedAt so "recently worked on" surfaces
+    // first. Drizzle's $onUpdate fires for every mutation - including photo
+    // reorder/alt-text edits via the per-photo server fns - so fixing a typo
+    // on alt text shuffles the row to the top. Intentional: alt edits ARE
+    // working on the item; consistent treatment beats trying to classify
+    // "real" edits.
+    const rows = await db
+      .select()
+      .from(items)
+      .orderBy(
+        sql`CASE WHEN ${items.status} = ${"draft" satisfies ItemStatus} THEN 0 ELSE 1 END`,
+        desc(items.updatedAt),
+      );
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
     const trans = await db

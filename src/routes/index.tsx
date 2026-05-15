@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { desc, inArray, ne } from "drizzle-orm";
+import { desc, inArray, ne, sql } from "drizzle-orm";
 import { SearchIcon, SearchXIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
@@ -63,11 +63,23 @@ const loadList = createServerFn({ method: "GET" }).handler(async (): Promise<{ r
   const language = getLanguage();
   const db = getDb();
 
+  // Status priority first so available items always sit above reserved
+  // and sold ones, regardless of when each was listed - otherwise an old
+  // sold item lands above a fresh available one and the visitor's eye
+  // wastes a beat on a row they can't act on. createdAt DESC within each
+  // group keeps "what's new" intact. Draft is filtered out above so the
+  // CASE never needs to rank it. Priorities are driven from PUBLIC_STATUSES
+  // (declaration order = priority) so reordering / renaming the constant
+  // propagates here without a separate edit.
+  const statusPriority = sql.join(
+    PUBLIC_STATUSES.map((s, i) => sql`WHEN ${s} THEN ${i}`),
+    sql` `,
+  );
   const all = await db
     .select()
     .from(items)
     .where(ne(items.status, "draft"))
-    .orderBy(desc(items.createdAt));
+    .orderBy(sql`CASE ${items.status} ${statusPriority} END`, desc(items.createdAt));
   const ids = all.map((i) => i.id);
   const trs =
     ids.length === 0
