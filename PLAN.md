@@ -572,13 +572,6 @@ Commits in the follow-on series (all shipped):
 
 Deferred to follow-up commits (ordered roughly by priority):
 
-- **Shared auth middleware.** Every mutating server fn opens with the same
-  `isAdminSession(getCookie(...), env.COOKIE_SECRET)` check. The plan
-  already endorsed extracting this to a `createMiddleware().server(...)`.
-  The import-protection plugin allows it as long as the middleware lives
-  in a non-`*.server.ts` module that references `auth.server.ts` only
-  inside its `.server(...)` body - same trick `src/lib/item-actions.ts`
-  uses to share `setItemStatus`. ~9 server fn call sites collapse to one.
 - **Keyboard sortability on the photo grid.** @dnd-kit only has
   `PointerSensor` registered; adding `KeyboardSensor` is a few extra
   lines and gives keyboard reordering. Low priority at single-admin

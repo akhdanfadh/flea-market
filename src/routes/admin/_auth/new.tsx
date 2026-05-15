@@ -1,8 +1,6 @@
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { Link, createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
-import { env } from "cloudflare:workers";
 import { ChevronLeftIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -25,17 +23,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getDb } from "@/db/client.ts";
 import { itemTranslations, items } from "@/db/schema.ts";
-import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
+import { requireAdmin } from "@/lib/auth-middleware.ts";
 import { draftItemPayloadSchema } from "@/lib/item-schema.ts";
 import { generateUniqueSlug, withSlugErrorWrap } from "@/lib/slug.server.ts";
 import { slugifyTitle } from "@/lib/slug.ts";
 
 const createDraftItem = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(draftItemPayloadSchema)
   .handler(async ({ data }): Promise<{ slug: string }> => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const id = crypto.randomUUID();
 

@@ -1,7 +1,6 @@
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
-import { Link, createFileRoute, notFound, redirect, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { ChevronLeftIcon } from "lucide-react";
@@ -39,7 +38,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { getDb } from "@/db/client.ts";
 import { CURRENCIES, itemTranslations, items } from "@/db/schema.ts";
-import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
+import { requireAdmin } from "@/lib/auth-middleware.ts";
 import { ITEM_NOT_FOUND_ERROR } from "@/lib/item-actions.ts";
 import { itemIdSchema, itemPayloadSchema } from "@/lib/item-schema.ts";
 import { MINOR_UNITS, isCurrency } from "@/lib/money.ts";
@@ -57,11 +56,9 @@ type ItemForEdit = {
 };
 
 const getItemForEdit = createServerFn({ method: "GET" })
+  .middleware([requireAdmin])
   .inputValidator((slug: unknown) => z.string().min(1).parse(slug))
   .handler(async ({ data: slug }): Promise<ItemForEdit | null> => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const found = await db.select().from(items).where(eq(items.slug, slug)).limit(1);
     const item = found[0];
@@ -102,11 +99,9 @@ const getItemForEdit = createServerFn({ method: "GET" })
   });
 
 const updateItem = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(z.object({ id: itemIdSchema, payload: itemPayloadSchema }))
   .handler(async ({ data }): Promise<{ slug: string }> => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
 
     // Probe inside the tx so the slug-uniqueness check and the update
@@ -156,11 +151,9 @@ const updateItem = createServerFn({ method: "POST" })
   });
 
 const removeItemPhoto = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(z.object({ id: itemIdSchema, key: z.string().min(1) }))
   .handler(async ({ data }) => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const found = await db
       .select({ photos: items.photos })
@@ -187,11 +180,9 @@ const removeItemPhoto = createServerFn({ method: "POST" })
   });
 
 const setItemPhotoOrder = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(z.object({ id: itemIdSchema, keys: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }) => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const found = await db
       .select({ photos: items.photos })
@@ -220,11 +211,9 @@ const setItemPhotoOrder = createServerFn({ method: "POST" })
   });
 
 const setItemPhotoAlt = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(z.object({ id: itemIdSchema, key: z.string().min(1), alt: z.string().max(200) }))
   .handler(async ({ data }) => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const found = await db
       .select({ photos: items.photos })

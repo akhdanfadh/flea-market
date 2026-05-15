@@ -1,6 +1,5 @@
-import { Link, createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 import { desc, eq, inArray } from "drizzle-orm";
 import { ImageIcon, LanguagesIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -42,7 +41,7 @@ import {
 } from "@/components/ui/table";
 import { getDb } from "@/db/client.ts";
 import { ITEM_STATUSES, LANGUAGES, itemTranslations, items } from "@/db/schema.ts";
-import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
+import { requireAdmin } from "@/lib/auth-middleware.ts";
 import { ITEM_NOT_FOUND_ERROR } from "@/lib/item-actions.ts";
 import { itemIdSchema } from "@/lib/item-schema.ts";
 import { formatPrice } from "@/lib/money.ts";
@@ -61,11 +60,9 @@ type AdminItemRow = {
   languages: Language[];
 };
 
-const getAdminItems = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AdminItemRow[]> => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
+const getAdminItems = createServerFn({ method: "GET" })
+  .middleware([requireAdmin])
+  .handler(async (): Promise<AdminItemRow[]> => {
     const db = getDb();
     // Sort by updatedAt so "recently worked on" surfaces first. Drizzle's
     // $onUpdate fires for every mutation - including photo reorder/alt-text
@@ -104,15 +101,12 @@ const getAdminItems = createServerFn({ method: "GET" }).handler(
         languages,
       };
     });
-  },
-);
+  });
 
 const deleteItem = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator(z.object({ id: itemIdSchema }))
   .handler(async ({ data }) => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
     const db = getDb();
     const found = await db
       .select({ photos: items.photos })
