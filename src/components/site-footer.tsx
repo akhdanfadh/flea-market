@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogOutIcon, ShieldIcon } from "lucide-react";
+import { GithubIcon, LogOutIcon, ShieldIcon } from "lucide-react";
 
 export function SiteFooter() {
   // Anything under /admin/ except /admin/login/ is guarded by the _auth
@@ -39,6 +39,15 @@ export function SiteFooter() {
             <ShieldIcon className="size-3.5" />
           </Link>
         )}
+        <a
+          href="https://github.com/akhdanfadh/flea-market"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Source on GitHub"
+          className="inline-flex items-center hover:text-foreground"
+        >
+          <GithubIcon className="size-3.5" />
+        </a>
         <span>&copy; {new Date().getFullYear()} Akhdan Fadhilah.</span>
       </div>
     </footer>
