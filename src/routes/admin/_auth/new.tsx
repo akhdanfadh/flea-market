@@ -27,7 +27,7 @@ import { getDb } from "@/db/client.ts";
 import { itemTranslations, items } from "@/db/schema.ts";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 import { draftItemPayloadSchema } from "@/lib/item-schema.ts";
-import { generateUniqueSlug } from "@/lib/slug.server.ts";
+import { generateUniqueSlug, withSlugErrorWrap } from "@/lib/slug.server.ts";
 import { slugifyTitle } from "@/lib/slug.ts";
 
 const createDraftItem = createServerFn({ method: "POST" })
@@ -38,7 +38,6 @@ const createDraftItem = createServerFn({ method: "POST" })
     }
     const db = getDb();
     const id = crypto.randomUUID();
-    const slug = await generateUniqueSlug(data.slug, db);
 
     // Schema default for status is "available"; drafts opt in explicitly.
     // The translation schema already .trim()s as a transform, so values
@@ -61,17 +60,25 @@ const createDraftItem = createServerFn({ method: "POST" })
           ]
         : []),
     ];
-    await db.transaction(async (tx) => {
-      await tx.insert(items).values({
-        id,
-        slug,
-        priceAmount: null,
-        priceCurrency: null,
-        status: "draft",
-        photos: [],
-      });
-      await tx.insert(itemTranslations).values(translationRows);
-    });
+    // Probe inside the tx so the slug-uniqueness check and the insert
+    // observe the same snapshot; withSlugErrorWrap translates a UNIQUE
+    // collision at commit into a friendly message instead of the raw
+    // libsql error.
+    const slug = await withSlugErrorWrap(() =>
+      db.transaction(async (tx) => {
+        const resolved = await generateUniqueSlug(data.slug, tx);
+        await tx.insert(items).values({
+          id,
+          slug: resolved,
+          priceAmount: null,
+          priceCurrency: null,
+          status: "draft",
+          photos: [],
+        });
+        await tx.insert(itemTranslations).values(translationRows);
+        return resolved;
+      }),
+    );
     return { slug };
   });
 
@@ -81,14 +88,20 @@ export const Route = createFileRoute("/admin/_auth/new")({
 
 function NewItemPage() {
   const router = useRouter();
-  // Edit slug is opt-in: the form previews a slug live from the EN title
-  // until the admin clicks "Edit slug". After that the auto-sync stops so
-  // the admin's manual value isn't overwritten on every keystroke.
+  // Slug toggles between auto-preview (derived from the EN title on each
+  // keystroke) and manual edit. The toggle is reversible - clicking
+  // "Auto-generate" while in manual mode resumes the title-derived preview
+  // (and overwrites whatever the admin typed on the next effect tick).
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [idEnabled, setIdEnabled] = useState(false);
 
+  // onTouched validates after each field's first blur (then re-validates on
+  // change while the error is showing). The admin types freely; tabbing
+  // away from an invalid slug like "My Item!" surfaces the error instead
+  // of holding it until Save.
   const form = useForm<DraftItemPayload>({
     resolver: standardSchemaResolver(draftItemPayloadSchema),
+    mode: "onTouched",
     defaultValues: {
       slug: "",
       translations: { en: { title: "", description: "" }, id: undefined },
@@ -109,6 +122,19 @@ function NewItemPage() {
     }
     form.setValue("slug", slugifyTitle(enTitle), { shouldValidate: false });
   }, [enTitle, slugManuallyEdited, form]);
+
+  // onTouched fires the slug validator on first blur regardless of mode -
+  // even when readOnly. In auto mode the admin can't fix the slug directly
+  // (it derives from the title), so a red error here would be confusing
+  // and stick around until they type a title. Suppress it by clearing
+  // whenever it surfaces in auto mode; schema validation still fires on
+  // Save so a genuinely invalid slug never persists.
+  const slugError = form.formState.errors.slug;
+  useEffect(() => {
+    if (!slugManuallyEdited && slugError) {
+      form.clearErrors("slug");
+    }
+  }, [slugError, slugManuallyEdited, form]);
 
   // Park whatever the admin typed into the ID translation fields when they
   // uncheck the toggle, restore on re-check. Without this, a stray click on
@@ -261,7 +287,7 @@ function NewItemPage() {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid || undefined}>
                 <FieldLabel htmlFor="slug">URL slug</FieldLabel>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Input
                     id="slug"
                     {...field}
@@ -270,21 +296,18 @@ function NewItemPage() {
                     aria-invalid={fieldState.invalid}
                     className="font-mono"
                   />
-                  {!slugManuallyEdited && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSlugManuallyEdited(true)}
-                    >
-                      Edit slug
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSlugManuallyEdited((v) => !v)}
+                  >
+                    {slugManuallyEdited ? "Auto-generate slug" : "Edit slug manually"}
+                  </Button>
                 </div>
                 <FieldDescription>
-                  Auto-generated from the English title and today's date. The final slug may be
-                  suffixed with -2, -3 if it collides with an existing item; the toast on save shows
-                  what was actually stored.
+                  Auto-generated from the English title and today's date, or edit it manually. The
+                  final slug may be suffixed with -2, -3 if it collides with an existing item.
                 </FieldDescription>
                 <FieldError errors={[fieldState.error]} />
               </Field>

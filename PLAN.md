@@ -381,14 +381,15 @@ Pitfalls baked in:
 
 ## Step 8: Admin CRUD
 
-**Status**: Partial (2026-05-15). Admin index (table page) landed; new and edit
-pages stubbed pending the drafts refactor below. Original Step 8 plan assumed
-photos as form state (uploaded on drop, committed on Save) - review of that
-approach surfaced two problems (abandoned-create orphans, and a real bug where
-`slugifyTitle("")` returns just the date prefix and lets photos upload under
-`20260514/...` with no item identity). Step 8 is intentionally split: the table
-page ships now in its reviewed final form, then a follow-on series of commits
-adds first-class draft items + photos-as-server-state.
+**Status**: Done (2026-05-15). The admin index landed first as a reviewable
+baseline; the new + edit pages then shipped in three follow-on commits
+implementing first-class draft items + photos-as-server-state. Original Step 8
+plan assumed photos as form state (uploaded on drop, committed on Save) -
+review of that approach surfaced two problems (abandoned-create orphans, and
+a real bug where `slugifyTitle("")` returns just the date prefix and lets
+photos upload under `20260515/...` with no item identity) which drove the
+rework into the drafts shape. Production verification deferred to the user's
+next deploy.
 
 What landed:
 
@@ -436,29 +437,79 @@ What landed:
   use straight double quotes (`"Kotatsu..."`, `"sold"`), via `&quot;` in JSX
   text where needed.
 
-What is **stubbed** pending the drafts refactor:
+What landed in the follow-on drafts series:
 
-- `src/routes/admin/_auth/new.tsx` - placeholder div, no form.
-- `src/routes/admin/_auth/$slug/edit.tsx` - placeholder div, no form. (Edit
-  Links on the table resolve to it; admin sees "lands with the drafts
-  refactor".)
-- No photo dropzone, no @dnd-kit grid, no shared `ItemForm` component, no
-  `react-hook-form` / `@hookform/resolvers` / dnd-kit wiring yet - those land
-  in the drafts series even though the deps are already installed (commit
-  `cd32d04`).
-- No `createItem` / `updateItem` / `getItemForEdit` server fns yet.
+- **Schema**: `"draft"` added at the head of `ITEM_STATUSES`. Public list and
+  detail loaders filter `ne(items.status, "draft")`; a draft slug visited
+  directly returns 404. Default stays `"available"` so ad-hoc inserts land
+  published; the new-item form sets `draft` explicitly.
+- **Public-vs-admin status split**: new `src/lib/statuses.ts` exports
+  `PUBLIC_STATUSES` (subset-of-`ItemStatus` enforced via `as const satisfies
+ReadonlyArray<ItemStatus>`) and a shared `STATUS_LABEL` map. Public search
+  schema uses `PUBLIC_STATUSES`, so `?status=draft` is rejected at the URL
+  boundary as well as the SQL filter.
+- **New-item page** (`/admin/_auth/new.tsx`): minimal RHF form (slug + EN
+  translation required, ID optional) against `draftItemPayloadSchema`. Single
+  "Save draft" button + inline `createDraftItem` server fn that probes a
+  unique slug, inserts the items row with `status: "draft"` + the
+  translation row(s) in a `db.transaction`, then redirects to
+  `/admin/<slug>/edit/`. Slug auto-previews live from the EN title and
+  strips Unicode combining marks (`\p{M}` after NFKD) so accents land in
+  clean ASCII.
+- **Edit page** (`/admin/_auth/$slug/edit.tsx`): full metadata form against
+  the wider `itemPayloadSchema` (slug + translations + price), plus the
+  server-state photo section. Photos render from loader data with an
+  `optimisticPhotos` overlay during in-flight mutations. Status changes
+  go through the `StatusSelect` dropdown in the header (shared with the
+  admin table row) which calls `setItemStatus`; the metadata Save button
+  never changes status. Slug renames navigate to the new URL on save.
+- **Upload endpoint refactor** (`/admin/api/upload`): `?slug=` -> `?item=`;
+  validates the item row exists before touching R2, generates UUID-prefixed
+  key `<items.id>/<timestamp>-<rand>.<ext>`, appends to `items.photos`
+  in one SELECT-then-UPDATE round-trip (not transaction-atomic; race
+  with parallel uploads is documented in the dropzone), returns
+  `{key, photos}`. The slug-vs-key decoupling
+  collapses to UUID-vs-slug: slug renames don't rewrite keys.
+- **Per-photo mutations**: `removeItemPhoto`, `setItemPhotoOrder`,
+  `setItemPhotoAlt` server fns colocated with the edit route. Removal
+  best-effort deletes the R2 object; reorder validates the incoming key
+  set is a permutation of current photos and refuses cross-tab drift; alt
+  edits persist on blur (uncontrolled input).
+- **Status photo gate**: the only invariant on status changes is "a
+  draft can leave draft state only with `photos.length >= 1`". Going
+  back to draft (unpublish) and `available <-> reserved <-> sold` are
+  free moves. The `StatusSelect` dropdown disables blocked targets when
+  the gate isn't satisfied, and `setItemStatus` re-checks the row's
+  current status + photos count server-side and refuses with "Add at
+  least one photo before publishing" if the gate would be bypassed.
+- **Shared primitives**: `src/lib/slug.ts` (pure `slugifyTitle` +
+  `SLUG_PATTERN`), `src/lib/slug.server.ts`
+  (`generateUniqueSlug(desired, db, excludeId?)`),
+  `src/lib/item-schema.ts` (split: `draftItemPayloadSchema` for create,
+  `itemPayloadSchema` for edit). Photo grid uses @dnd-kit (`PointerSensor`
+  with `activationConstraint: { distance: 5 }` so click-to-delete + alt-input
+  focus survive). Photo dropzone uploads sequentially (server side
+  read-modify-write would race on parallel POSTs against the same row).
+- **`DEFAULT_CURRENCY`** finally wired into `wrangler.jsonc` `vars` +
+  `src/types/env.d.ts`; the edit form's price section reads it via the
+  route's loader (folded into `getItemForEdit`).
+- **`shadcn add checkbox`** pulled in for the "Add Indonesian translation"
+  and "Free" toggles on the forms.
 
 Pitfalls baked in (carried over from earlier exploration):
 
 - TanStack Start's import-protection plugin only allows imports from
   `*.server.ts` modules when every usage is inside a `createServerFn(...).handler()`
   or `createMiddleware(...).server()` body. Chaining `.middleware([m])` does
-  not count, and re-exporting server fns through a shared client-reachable
-  module is blocked. The table page's `getAdminItems` / `setItemStatus` /
-  `deleteItem` are inline in the route file, matching the precedent of
-  `_auth.tsx` and `login.tsx`. Auth is checked at the top of every handler
-  via `isAdminSession(getCookie(...), env.COOKIE_SECRET)`. The same pattern
-  carries forward into the drafts series.
+  not count. Shared **non-`.server.ts`** modules that import from
+  `*.server.ts` are fine as long as the same rule holds inside them - the
+  AST analyzer walks the module they live in, not the route that imports
+  them. `src/lib/item-actions.ts` exploits this to share `setItemStatus`
+  across the admin table page and the edit page. Routes-local handlers
+  (`getAdminItems`, `deleteItem`,
+  `getItemForEdit`, `updateItem`, the per-photo fns, etc.) stay inline in
+  their route file when there's only one caller. Auth is checked at the
+  top of every handler via `isAdminSession(getCookie(...), env.COOKIE_SECRET)`.
 - Zod 4.4 + `@hookform/resolvers@5.2`'s `zodResolver` types are incompatible
   (the resolver expects `_zod.version.minor === 0`). Use
   `standardSchemaResolver` from `@hookform/resolvers/standard-schema` instead;
@@ -472,10 +523,7 @@ Pitfalls baked in (carried over from earlier exploration):
   `Link` and `navigate` must include the trailing slash (e.g.
   `/admin/$slug/edit/`, not `/admin/$slug/edit`). Typecheck catches this.
 
-Production verification deferred to after the drafts refactor lands (commits
-2-5 below).
-
-### Drafts + photos as server state (follow-on commits)
+### Drafts + photos as server state (follow-on commits) - shipped
 
 Rationale: the form-state photo approach has unfixable orphan vectors at
 flow-design level (admin abandons mid-create -> R2 objects orphan under a
@@ -488,11 +536,13 @@ Rather than ship that and lean on a future GC script, we shift to:
   inserts the `items` row immediately with `status: "draft"`,
   `photos: []`. Redirect to `/admin/<slug>/edit/`.
 - Photos become **server state** on the edit page: each upload, remove,
-  reorder, and alt-edit is its own server fn that atomically updates
-  `items.photos`. R2 key prefix uses `items.id` (UUID), not slug - slug
+  reorder, and alt-edit is its own server fn that rewrites `items.photos`
+  via one SELECT-then-UPDATE round-trip. R2 key prefix uses `items.id` (UUID), not slug - slug
   rename never affects keys.
-- Publish flow: separate `publishItem` server fn flips status from `draft` to
-  `available`, refuses if `photos.length === 0`.
+- Status changes go through a single `setItemStatus` server fn with one
+  photo gate: a draft can leave draft state (to any of `available`,
+  `reserved`, `sold`) only if `photos.length >= 1`. Going back to draft
+  and published-state shuffles are free.
 
 Why this eliminates the orphan problem:
 
@@ -501,48 +551,42 @@ Why this eliminates the orphan problem:
 - Remaining orphan vector is only "publish-time R2 hiccups" at process-death
   scale - rare enough to ignore at single-admin scale.
 
-Commits in the follow-on series:
+Commits in the follow-on series (all shipped):
 
 2. **`chore(schema): add draft status, exclude from public loaders`** -
-   `src/db/schema.ts` adds `"draft"` to `ITEM_STATUSES`. Public list
-   (`src/routes/index.tsx`) and detail (`src/routes/$slug.tsx`) loaders filter
-   `where(ne(items.status, "draft"))`. ARCHITECTURE.md #Data model updated.
-   User runs `pnpm db:push` against Turso before deploy.
-3. **`feat(admin): draft-creation flow`** - re-adds `src/lib/slug.ts`,
-   `src/lib/slug.server.ts`; new `src/lib/item-schema.ts` exporting a
-   `draftItemPayloadSchema` (no photos, no price, no status). The new-item
-   route becomes a minimal RHF form with a single "Save draft" button +
-   inline `createDraftItem` server fn that inserts the row and redirects.
-   ARCHITECTURE.md adds #Drafts subsection.
-4. **`feat(admin): photos as server state`** - upload endpoint refactored
-   from `?slug=` to `?item=` with atomic R2 PUT + `items.photos` append;
-   R2 key prefix becomes `<itemId>/<timestamp>-<rand>.<ext>`. Photo
-   dropzone and grid components rewired to drive a server-state photo
-   section. The per-photo server fns (`removeItemPhoto`,
-   `setItemPhotoOrder`, `setItemPhotoAlt`) land with the edit route file
-   in commit 5; commits 4 + 5 **deploy together**. ARCHITECTURE.md
-   #Image pipeline updated for the UUID prefix.
-5. **`feat(admin): item editing and publish flow`** - full edit route with
-   metadata RHF form + server-state photo section + Publish button (gated
-   on `photos.length >= 1`). Inline server fns: `getItemForEdit`,
-   `updateItem`, `removeItemPhoto`, `setItemPhotoOrder`,
-   `setItemPhotoAlt`, `publishItem`, `unpublishItem`. Admin index gets
-   draft chip (zinc color) + draft option in row dropdown. The row
-   status dropdown also needs the publish gate: today's `setItemStatus`
-   accepts any `ItemStatus`, so a draft -> available transition via the
-   dropdown would bypass the `photos.length >= 1` check that
-   `publishItem` enforces. Two ways to close that gap in commit 5: route
-   draft -> available through `publishItem` from the dropdown itself, or
-   disable the "Available" menu item when `photos.length === 0` for draft
-   rows. Either is fine; the gate just has to live in both call paths.
-   `DEFAULT_CURRENCY` finally wired into `wrangler.jsonc` + env types
-   (the edit form's price section consumes it).
+   schema enum, public loader filters, `PUBLIC_STATUSES` + `STATUS_LABEL`
+   hoisted into `src/lib/statuses.ts`. `pnpm db:push` is a no-op at the
+   row level since the enum is application-validated.
+3. **`feat(admin): draft-creation flow`** - new-item page becomes the
+   minimal RHF form against `draftItemPayloadSchema`; `createDraftItem`
+   inline server fn; redirect to edit page. `src/lib/slug.ts` +
+   `slug.server.ts` re-added.
+4. **`feat(admin): edit page, photos as server state, status photo gate`** -
+   the combined commit (originally split as C4 + C5 in early planning;
+   merged once the import-protection plugin made the split awkward).
+   Upload endpoint refactor, photo dropzone + grid components, edit route
+   with metadata form, per-photo server fns, shared `setItemStatus` server
+   fn + `useChangeStatus` hook driving the `StatusSelect` dropdown from
+   both UI surfaces with the photo gate (draft can leave draft only with
+   > =1 photo), `DEFAULT_CURRENCY` wiring.
 
-Deferred to a possible follow-up commit:
+Deferred to follow-up commits (ordered roughly by priority):
 
-- **Undo-toast on photo removal.** Sonner toast with a 5s "Undo" action that
-  holds the `File` blob client-side and re-uploads if invoked. ~40 LOC; build
-  later if removal mistakes turn out to be common.
+- **Shared auth middleware.** Every mutating server fn opens with the same
+  `isAdminSession(getCookie(...), env.COOKIE_SECRET)` check. The plan
+  already endorsed extracting this to a `createMiddleware().server(...)`.
+  The import-protection plugin allows it as long as the middleware lives
+  in a non-`*.server.ts` module that references `auth.server.ts` only
+  inside its `.server(...)` body - same trick `src/lib/item-actions.ts`
+  uses to share `setItemStatus`. ~9 server fn call sites collapse to one.
+- **Keyboard sortability on the photo grid.** @dnd-kit only has
+  `PointerSensor` registered; adding `KeyboardSensor` is a few extra
+  lines and gives keyboard reordering. Low priority at single-admin
+  scope but the right thing.
+- **Production verification.** `pnpm run deploy`, then a smoke test in
+  prod with `wrangler tail`: R2 binding live, Image Transformations
+  enabled, Workers Route precedence correct, cookie set/clear loop
+  end-to-end. Per CLAUDE.md, deploy is a human-driven step.
 
 **Goal**: Admin can create drafts, attach photos progressively, edit
 metadata, and publish; visitors never see draft items.

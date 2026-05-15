@@ -123,7 +123,7 @@ Application-level rule: every item must have at least one `en` translation befor
 
 **Draft status**
 
-`draft` is the admin's working state - items are created in `draft` from the new-item page, then promoted to `available` via an explicit Publish action once metadata and photos are in place. Public loaders filter `ne(items.status, "draft")` so visitors never see drafts on the list page, and a draft slug visited directly returns `notFound()`. The schema default for `status` stays `available` so any non-form insert path (seed script, ad-hoc) lands published; the new-item form sets `draft` explicitly.
+`draft` is the admin's working state - items are created in `draft` from the new-item page and then move to a published status via the `StatusSelect` dropdown on the edit page (or the row dropdown on the admin index). The dropdown calls `setItemStatus`, which enforces a single invariant: leaving `draft` requires `photos.length >= 1`. Public loaders filter `ne(items.status, "draft")` so visitors never see drafts on the list page, and a draft slug visited directly returns `notFound()`. The schema default for `status` stays `available` so any non-form insert path (seed script, ad-hoc) lands published; the new-item form sets `draft` explicitly.
 
 The other three statuses (`available`, `reserved`, `sold`) are all public-visible. Cart and contact flow excludes `sold` from purchase-able items; `reserved` is informational. See `#Cart and contact flow`.
 
@@ -196,11 +196,12 @@ A link sent to a contact does not force their browser into your language; their 
 
 ## Image pipeline
 
-1. Admin drags photos into react-dropzone in the create/edit form
-2. Each file is POSTed to `/admin/api/upload?slug={slug}` as a binary body
-3. Worker checks the admin cookie, generates key `{slug}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`jpg` / `png` / `webp` / `heic`; other types rejected with 415), then calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`
-4. Worker returns the key; the form appends it to the item's `photos` array
-5. On save, the items row stores `photos: [{key, alt?}, ...]`
+1. Admin drags photos into the react-dropzone on the edit page (the item row must already exist - drafts are created first via the new-item form)
+2. Each file is POSTed sequentially to `/admin/api/upload?item={itemId}` as a binary body, where `itemId` is the row's UUID
+3. Worker checks the admin cookie, looks up the row (404 if missing), generates key `{itemId}/{timestamp}-{rand}.<ext>` where `<ext>` is derived from the request's `Content-Type` (`jpg` / `png` / `webp` / `heic`; other types rejected with 415), calls `env.BUCKET.put(key, request.body, { httpMetadata: { contentType } })`, then appends `{key}` to `items.photos` in a single SELECT-then-UPDATE round-trip (not atomic; concurrent uploads against the same row would race, but the dropzone serializes them per-session)
+4. Worker returns `{key, photos}` (the updated full photos array); the dropzone hands the array off to the route which calls `router.invalidate()` to refresh the photo grid from loader data
+
+Photos are server state on the edit page. Removal (`removeItemPhoto`), reorder (`setItemPhotoOrder`), and alt-text edits (`setItemPhotoAlt`) are each their own server fn that rewrites `items.photos` via SELECT-then-UPDATE (one round-trip, not transaction-atomic). R2 keys use the UUID prefix on purpose: slug renames after upload don't affect keys, and the upload endpoint can refuse mistyped item IDs cheaply (one indexed lookup) before touching R2.
 
 Serving:
 
@@ -268,27 +269,25 @@ If the admin password leaks, rotate both.
 
 ## Drafts
 
-This section describes the full drafts lifecycle. The "Save draft" form lands first; the edit page, photo upload UUID-prefix refactor, and `publishItem` gate land in the same follow-on commit. Where bullets below describe behavior that's intent-not-yet-shipped, they're called out inline.
-
-Item creation is a two-step UX. The admin lands on `/admin/new/` with a minimal form (English title + description, optional Indonesian, plus the auto-previewed slug); clicking **Save draft** inserts the row with `status: "draft"` and empty `photos`, then redirects to `/admin/<slug>/edit/`. The edit page is where photos, price, and the rest of the metadata get filled in; it also exposes an explicit **Publish** action that flips status from `draft` to `available` (refused unless `photos.length >= 1`).
+Item creation is a two-step UX. The admin lands on `/admin/new/` with a minimal form (English title + description, optional Indonesian, plus the auto-previewed slug); clicking **Save draft** inserts the row with `status: "draft"` and empty `photos`, then redirects to `/admin/<slug>/edit/`. The edit page is where photos, price, and the rest of the metadata get filled in; the `StatusSelect` dropdown in the header transitions the row out of `draft` to any of `available`, `reserved`, or `sold` once at least one photo exists (the gate is `setItemStatus`'s only invariant).
 
 Why two steps rather than one combined form:
 
 - **Atomic photo lifecycle.** Photos can't be uploaded before the row exists, so abandoned half-filled forms can't orphan R2 objects under a placeholder prefix. Every photo is tied to a real `items.id` from the moment it's uploaded.
 - **Multi-session resilience.** A draft persists across browser closures and devices. The admin can start an item on their phone, finish on desktop.
 - **Per-photo failure isolation.** Uploads happen one at a time against the existing row, so a single flaky upload doesn't block the rest of the photo set.
-- **Slug stability at upload time.** R2 keys will be prefixed with the item's UUID (`<items.id>/<timestamp>-<rand>.<ext>`) once the upload endpoint refactor lands alongside the edit page, so slug renames after upload don't rewrite keys. Today the upload endpoint still uses the slug prefix - the migration ships alongside the edit page.
+- **Slug stability at upload time.** R2 keys are prefixed with the item's UUID (`<items.id>/<timestamp>-<rand>.<ext>`); slug renames after upload don't rewrite them.
+
+On the edit page, photos are server state: each upload, removal, reorder, and alt-text edit is its own server fn that rewrites `items.photos` in one SELECT-then-UPDATE round-trip. The dropzone POSTs each file to `/admin/api/upload?item=<id>` (the endpoint validates the item exists, writes R2, then runs the same round-trip and returns the updated array). Per-photo mutations from the grid run through `removeItemPhoto`, `setItemPhotoOrder`, and `setItemPhotoAlt`. The form's Save button only persists metadata (slug, translations, price); status changes go through the `StatusSelect` dropdown (which calls `setItemStatus`), never through the metadata save.
 
 Visibility:
 
 - Public list and detail loaders both filter `ne(items.status, "draft")`; a direct hit on a draft slug returns 404 (`notFound()`). Draft rows are invisible to visitors regardless of how they arrive.
 - Admin index shows drafts mixed with published rows, with a zinc status chip distinguishing them from the green/amber/rose colors of `available`/`reserved`/`sold`. The Name link on a draft row points to the admin edit page rather than the public detail (which would 404).
 
-Status transitions (full set lands with the edit + publish commit):
+Status transitions go through a single server fn, `setItemStatus`. The only invariant is the photo gate: a `draft` can leave `draft` state only when `photos.length >= 1`. Everything else - any -> `draft` (unpublish) and `available ↔ reserved ↔ sold` (free moves among published states) - is unrestricted, because they're recovery/workflow choices the admin owns.
 
-- Any state -> `draft` is freely reachable via the admin's row-status dropdown (an admin can unpublish at any time). _Shipped today._
-- `draft -> available` will be gated on `photos.length >= 1` and route through `publishItem` so the gate is enforced regardless of which UI surface triggers the transition. _Today the dropdown calls `setItemStatus` directly with no gate; the dropdown rewire ships alongside the edit page._
-- `available <-> reserved <-> sold` are arbitrary transitions through `setItemStatus`; the dropdown shows the published labels and applies the status directly. _Shipped today._
+The gate is enforced at two layers: the `StatusSelect` dropdown disables the published targets when the row is a draft without photos, and `setItemStatus` itself runs a SELECT before the UPDATE and refuses the same case server-side (with message "Add at least one photo before publishing"). A hand-rolled `curl` cannot bypass it.
 
 ## Cart and contact flow
 
