@@ -1,7 +1,14 @@
-import { Link } from "@tanstack/react-router";
-import { ShieldIcon } from "lucide-react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { LogOutIcon, ShieldIcon } from "lucide-react";
 
 export function SiteFooter() {
+  // Anything under /admin/ except /admin/login/ is guarded by the _auth
+  // layout's beforeLoad, so reaching such a path implies an authed session.
+  // Pathname is a sufficient proxy for "show logout" without surfacing the
+  // HttpOnly cookie state to the client.
+  const pathname = useLocation({ select: (s) => s.pathname });
+  const onAuthedAdmin = pathname.startsWith("/admin/") && !pathname.startsWith("/admin/login/");
+
   return (
     <footer>
       <div className="mx-auto flex max-w-6xl items-center justify-between p-4 text-sm text-muted-foreground">
@@ -10,17 +17,31 @@ export function SiteFooter() {
           &copy; {new Date().getFullYear()} Akhdan Fadhilah.
         </span>
         <span className="sm:flex-1 sm:text-right">
-          <Link
-            to="/admin/"
-            aria-label="Admin"
-            // preload={false} because the router has defaultPreload: "intent". Every
-            // anonymous hover would otherwise fire requireAdminSession's server-fn
-            // POST, surface admin existence in the network tab, and waste invocations.
-            preload={false}
-            className="inline-flex items-center hover:text-foreground"
-          >
-            <ShieldIcon className="size-3.5" />
-          </Link>
+          {onAuthedAdmin ? (
+            // Real POST form so SameSite=Lax cookie + Referer CSRF check on
+            // /admin/logout/ both apply; a Link would skip the Set-Cookie clear.
+            <form action="/admin/logout/" method="POST" className="inline-flex">
+              <button
+                type="submit"
+                aria-label="Log out"
+                className="inline-flex items-center hover:text-foreground"
+              >
+                <LogOutIcon className="size-3.5" />
+              </button>
+            </form>
+          ) : (
+            <Link
+              to="/admin/"
+              aria-label="Admin"
+              // preload={false} because the router has defaultPreload: "intent". Every
+              // anonymous hover would otherwise fire requireAdminSession's server-fn
+              // POST, surface admin existence in the network tab, and waste invocations.
+              preload={false}
+              className="inline-flex items-center hover:text-foreground"
+            >
+              <ShieldIcon className="size-3.5" />
+            </Link>
+          )}
         </span>
       </div>
     </footer>

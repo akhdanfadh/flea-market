@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 
-import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 
@@ -21,17 +20,13 @@ export const Route = createFileRoute("/admin/_auth")({
   component: AdminLayout,
 });
 
+// No admin-specific header chrome - the global SiteHeader stays, and the
+// SiteFooter's shield icon flips to a logout button when the visible
+// pathname is under /admin/ (excluding /admin/login/), so logout lives
+// in one consistent corner of every authed admin page.
 function AdminLayout() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6">
-      <header className="mb-6 flex items-center justify-between border-b border-border pb-3">
-        <h1 className="text-lg font-semibold">Admin</h1>
-        <form action="/admin/logout/" method="POST">
-          <Button type="submit" variant="outline" size="sm">
-            Log out
-          </Button>
-        </form>
-      </header>
       <Outlet />
       <Toaster position="top-center" />
     </div>
