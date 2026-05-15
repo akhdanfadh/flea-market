@@ -1,6 +1,8 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, inArray, ne } from "drizzle-orm";
+import { ChevronLeftIcon } from "lucide-react";
+import { z } from "zod";
 
 import type { DetailItem } from "@/components/detail-content.tsx";
 
@@ -11,6 +13,15 @@ import { itemTranslations, items } from "@/db/schema.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
 import { cn } from "@/lib/utils.ts";
+
+// `?from=admin` tells the back link to point at the admin table instead of
+// the public catalog. The literal "admin" survives TanStack Router's default
+// JSON.parse pass on inbound search values (it isn't valid JSON, so the
+// parser falls back to the raw string) - same pattern as `?failed=yes` on
+// the login route. Anything else gets caught and stripped.
+const searchSchema = z.object({
+  from: z.literal("admin").optional().catch(undefined),
+});
 
 type DetailPayload = {
   item: DetailItem;
@@ -58,6 +69,7 @@ const loadDetail = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/$slug")({
   loader: ({ params }) => loadDetail({ data: params.slug }),
+  validateSearch: searchSchema,
   head: ({ loaderData }) =>
     loaderData
       ? { meta: [{ title: `${loaderData.translation.title} | Akhdan's Flea Market` }] }
@@ -74,19 +86,36 @@ export const Route = createFileRoute("/$slug")({
 // SiteFooter (both ~3.5rem tall under their p-4 padding) and hides its overflow,
 // so the page itself doesn't scroll - only the description inside DetailContent
 // scrolls. 7rem covers header + footer with a small visual margin; tune if either
-// component's padding/typography changes.
-const PAGE_FRAME_LG = "lg:h-[calc(100dvh-7rem)] lg:overflow-hidden";
+// component's padding/typography changes. The grid-rows pattern keeps the back
+// link auto-height and lets DetailContent fill the remainder via its lg:h-full;
+// minmax(0, 1fr) lets the inner description's overflow-y:auto actually trigger
+// instead of pushing the 1fr row past the viewport bottom.
+const PAGE_FRAME_LG =
+  "lg:grid lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-4 lg:h-[calc(100dvh-7rem)] lg:overflow-hidden";
+
+const BACK_LINK_CLASS =
+  "mb-4 inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:mb-0";
 
 function Detail() {
   const { item, translation } = Route.useLoaderData();
-
+  const { from } = Route.useSearch();
+  // Pathname-typed Link: TanStack Router's typed routes don't accept a union
+  // for `to`, so render the right Link branch instead of computing the target.
   return (
     <div
-      className={cn(
-        "mx-auto max-w-6xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8",
-        PAGE_FRAME_LG,
-      )}
+      className={cn("mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8", PAGE_FRAME_LG)}
     >
+      {from === "admin" ? (
+        <Link to="/admin/" className={BACK_LINK_CLASS}>
+          <ChevronLeftIcon className="size-4" />
+          Back to items
+        </Link>
+      ) : (
+        <Link to="/" className={BACK_LINK_CLASS}>
+          <ChevronLeftIcon className="size-4" />
+          Back to catalog
+        </Link>
+      )}
       <DetailContent item={item} translation={translation} variant="page" />
     </div>
   );
@@ -98,11 +127,9 @@ function Detail() {
 function DetailSkeleton() {
   return (
     <div
-      className={cn(
-        "mx-auto max-w-6xl pt-2 px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8",
-        PAGE_FRAME_LG,
-      )}
+      className={cn("mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8", PAGE_FRAME_LG)}
     >
+      <Skeleton className="mb-4 h-5 w-32 lg:mb-0" />
       <div className="lg:grid lg:h-full lg:grid-cols-2 lg:gap-8">
         <Skeleton className="mx-auto aspect-square w-full rounded-lg sm:max-w-md lg:mx-0 lg:max-w-none lg:self-center" />
 

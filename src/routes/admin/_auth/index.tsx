@@ -362,6 +362,7 @@ function ItemRow({ row }: { row: AdminItemRow }) {
             <Link
               to="/$slug/"
               params={{ slug: row.slug }}
+              search={{ from: "admin" }}
               className="block truncate font-medium hover:underline"
               title={row.title}
             >
