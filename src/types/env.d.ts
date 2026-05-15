@@ -9,5 +9,6 @@ declare namespace Cloudflare {
     COOKIE_SECRET: string;
     BUCKET: R2Bucket;
     DEFAULT_LANGUAGE: string;
+    DEFAULT_CURRENCY: string;
   }
 }

@@ -3,21 +3,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 import { desc, eq, inArray } from "drizzle-orm";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ImageIcon,
-  LanguagesIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ImageIcon, LanguagesIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import type { Currency, ItemPhoto, ItemStatus, Language } from "@/db/schema.ts";
 
+import { StatusSelect } from "@/components/admin/status-select.tsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +24,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyContent,
@@ -56,9 +43,11 @@ import {
 import { getDb } from "@/db/client.ts";
 import { ITEM_STATUSES, LANGUAGES, itemTranslations, items } from "@/db/schema.ts";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
+import { ITEM_NOT_FOUND_ERROR } from "@/lib/item-actions.ts";
+import { itemIdSchema } from "@/lib/item-schema.ts";
 import { formatPrice } from "@/lib/money.ts";
 import { STATUS_LABEL } from "@/lib/statuses.ts";
-import { cn } from "@/lib/utils.ts";
+import { useChangeStatus } from "@/lib/use-change-status.ts";
 
 type AdminItemRow = {
   id: string;
@@ -78,6 +67,11 @@ const getAdminItems = createServerFn({ method: "GET" }).handler(
       throw redirect({ to: "/admin/login/" });
     }
     const db = getDb();
+    // Sort by updatedAt so "recently worked on" surfaces first. Drizzle's
+    // $onUpdate fires for every mutation - including photo reorder/alt-text
+    // edits via the per-photo server fns - so fixing a typo on alt text
+    // shuffles the row to the top. Intentional: alt edits ARE working on
+    // the item; consistent treatment beats trying to classify "real" edits.
     const rows = await db.select().from(items).orderBy(desc(items.updatedAt));
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
@@ -113,25 +107,8 @@ const getAdminItems = createServerFn({ method: "GET" }).handler(
   },
 );
 
-const setItemStatus = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ id: z.string().min(1), status: z.enum(ITEM_STATUSES) }))
-  .handler(async ({ data }) => {
-    if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
-      throw redirect({ to: "/admin/login/" });
-    }
-    const db = getDb();
-    const result = await db.update(items).set({ status: data.status }).where(eq(items.id, data.id));
-    // Parity with deleteItem: surface a missing row to the caller so the
-    // client toasts an error rather than a misleading "Status updated"
-    // (e.g. when the row was deleted in another tab between page load and
-    // click).
-    if (result.rowsAffected === 0) {
-      throw new Error("Item not found (it may have been deleted already)");
-    }
-  });
-
 const deleteItem = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ id: z.string().min(1) }))
+  .inputValidator(z.object({ id: itemIdSchema }))
   .handler(async ({ data }) => {
     if (!(await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET))) {
       throw redirect({ to: "/admin/login/" });
@@ -145,7 +122,7 @@ const deleteItem = createServerFn({ method: "POST" })
     const row = found[0];
     // Item may have been deleted in another tab; surface to the caller so the
     // client toasts an error rather than a false "Item deleted".
-    if (!row) throw new Error("Item not found (it may have been deleted already)");
+    if (!row) throw new Error(ITEM_NOT_FOUND_ERROR);
     // FK ON DELETE CASCADE drops translations.
     await db.delete(items).where(eq(items.id, data.id));
     // Best-effort R2 cleanup - a failure here leaves an orphan, but we don't
@@ -308,49 +285,19 @@ function AdminIndex() {
 function ItemRow({ row }: { row: AdminItemRow }) {
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [statusBusy, setStatusBusy] = useState(false);
   // Optimistic status reflects the click instantly so the colored trigger
   // and the menu's check mark update without waiting on the round-trip.
-  // Cleared after router.invalidate() refreshes row.status from the server,
-  // or cleared on failure so the unchanged `row.status` shows through again.
-  const [optimisticStatus, setOptimisticStatus] = useState<ItemStatus | null>(null);
-  const displayStatus = optimisticStatus ?? row.status;
-
-  async function changeStatus(next: ItemStatus) {
-    if (next === displayStatus) return;
-    const prev = displayStatus;
-    setOptimisticStatus(next);
-    setStatusBusy(true);
-    // Split the awaits so we can distinguish "mutation failed" from "mutation
-    // succeeded but refresh failed" - in the latter case the server has the
-    // new value, so we keep optimistic state set and toast a warning rather
-    // than a misleading "Failed to update status".
-    try {
-      await setItemStatus({ data: { id: row.id, status: next } });
-    } catch (err) {
-      setOptimisticStatus(null);
-      toast.error("Failed to update status", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-      setStatusBusy(false);
-      return;
-    }
-    try {
-      await router.invalidate();
-      setOptimisticStatus(null);
-      toast.success("Status updated", {
-        description: `Changed from ${STATUS_LABEL[prev]} to ${STATUS_LABEL[next]} for "${row.title}"`,
-      });
-    } catch {
-      // Mutation already landed server-side; leave the optimistic UI in place
-      // so the admin still sees what they picked.
-      toast.warning("Status updated, but the table didn't refresh", {
-        description: "Reload to see the latest state.",
-      });
-    } finally {
-      setStatusBusy(false);
-    }
-  }
+  const {
+    status: displayStatus,
+    busy: statusBusy,
+    change: changeStatus,
+  } = useChangeStatus({
+    id: row.id,
+    currentStatus: row.status,
+    buildSuccessDescription: (prev, next) =>
+      `Changed from ${STATUS_LABEL[prev]} to ${STATUS_LABEL[next]} for "${row.title}"`,
+    refreshFailedTitle: "Status updated, but the table didn't refresh",
+  });
 
   function confirmDelete() {
     // Close the dialog first so its exit animation runs before the row
@@ -425,48 +372,12 @@ function ItemRow({ row }: { row: AdminItemRow }) {
         </div>
       </TableCell>
       <TableCell>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={statusBusy}
-                className={cn("justify-between", STATUS_TRIGGER[displayStatus])}
-              >
-                {/* All labels stacked in one grid cell so CSS sizes the button */}
-                {/* to the widest. Non-active labels are `invisible` (kept in */}
-                {/* layout) + `aria-hidden` (skipped by screen readers). */}
-                <span className="grid text-left">
-                  {ITEM_STATUSES.map((s) => (
-                    <span
-                      key={s}
-                      aria-hidden={s !== displayStatus || undefined}
-                      className={cn("col-start-1 row-start-1", s !== displayStatus && "invisible")}
-                    >
-                      {STATUS_LABEL[s]}
-                    </span>
-                  ))}
-                </span>
-                <ChevronDownIcon className="size-3.5 opacity-70" />
-              </Button>
-            }
-          />
-          {/* Popup base style is `w-(--anchor-width) min-w-32` (128px floor). */}
-          {/* The trigger now sizes itself to the widest label, so drop the */}
-          {/* min and let the popup match the anchor exactly. */}
-          <DropdownMenuContent align="start" className="min-w-0">
-            {ITEM_STATUSES.map((s) => {
-              const isCurrent = s === displayStatus;
-              return (
-                <DropdownMenuItem key={s} disabled={isCurrent} onClick={() => changeStatus(s)}>
-                  {STATUS_LABEL[s]}
-                  {isCurrent && <CheckIcon className="ml-auto size-3.5 opacity-70" />}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <StatusSelect
+          status={displayStatus}
+          canExitDraft={row.photos.length > 0}
+          busy={statusBusy}
+          onChange={changeStatus}
+        />
       </TableCell>
       <TableCell>
         {row.priceAmount === null || row.priceCurrency === null
@@ -477,7 +388,13 @@ function ItemRow({ row }: { row: AdminItemRow }) {
       <TableCell>
         <span className="font-mono text-xs">{row.languages.join(",")}</span>
       </TableCell>
-      <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+      {/* Workers SSR in UTC, browser hydrates in local TZ - the string */}
+      {/* diverges by design. suppressHydrationWarning silences React's */}
+      {/* warning; hydration still repaints with the local-TZ value. */}
+      <TableCell
+        className="text-xs whitespace-nowrap text-muted-foreground"
+        suppressHydrationWarning
+      >
         {formatUpdatedAt(row.updatedAt)}
       </TableCell>
       <TableCell>
@@ -562,21 +479,3 @@ function formatUpdatedAt(ms: number): string {
   const min = String(d.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
 }
-
-// Status color lives on the trigger Button itself, not a nested pill. Each
-// entry overrides the outline variant's `dark:bg-input/30` rule (CLAUDE.md
-// #4 rule 9 - a plain `bg-*` loses the cascade against the dark: variant
-// the base classes carry).
-const STATUS_TRIGGER: Record<ItemStatus, string> = {
-  // Slate/zinc for draft: cool gray reads as "not yet published", distinct
-  // from the muted-foreground gray used elsewhere in the admin chrome, and
-  // visibly different from the green/amber/rose signal colors of the
-  // published states.
-  draft:
-    "border-zinc-500/30 bg-zinc-500/15 text-zinc-300 hover:bg-zinc-500/25 hover:text-zinc-200 dark:bg-zinc-500/15 dark:hover:bg-zinc-500/25",
-  available:
-    "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25",
-  reserved:
-    "border-amber-500/30 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 hover:text-amber-200 dark:bg-amber-500/15 dark:hover:bg-amber-500/25",
-  sold: "border-rose-500/30 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 hover:text-rose-200 dark:bg-rose-500/15 dark:hover:bg-rose-500/25",
-};
