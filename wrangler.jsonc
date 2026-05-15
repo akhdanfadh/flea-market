@@ -11,11 +11,14 @@
     "DEFAULT_CURRENCY": "JPY",
     // Display URLs minus protocol. The cart drawer shows these verbatim on
     // the contact buttons and prepends https:// when opening the link.
-    // NOTE: LINE_HANDLE pairs with the static QR image at public/line-qr.jpg.
-    // If a redeploy changes LINE_HANDLE (e.g. a Jakarta instance with a
-    // different LINE account), regenerate that image to match.
-    "FB_HANDLE": "m.me/akhdanfadh",
-    "LINE_HANDLE": "line.me/ti/p/iPItpl60Ll",
+    // Placeholders here; the deployer overrides these with their real
+    // contact handles via `wrangler secret put FB_HANDLE` /
+    // `wrangler secret put LINE_HANDLE`. See OPERATIONS.md.
+    // LINE_HANDLE pairs with a static QR object in R2 at key
+    // `static/line-qr.jpg` (served via `/images/static/line-qr.jpg`); upload
+    // your own QR there before deploy.
+    "FB_HANDLE": "m.me/your-handle",
+    "LINE_HANDLE": "line.me/ti/p/your-line-id",
   },
   // Match the implicit defaults when `routes` is set, but state them
   // explicitly so `wrangler deploy` doesn't emit a warning on every run.

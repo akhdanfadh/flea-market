@@ -2,16 +2,16 @@
 
 ## 1) Mission
 
-A self-hosted flea-market listing app served at `flea-market.akhdan.dev`, a
-dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the
-apex `akhdan.dev`. Single-admin CRUD, public browse + cart-to-contact flow,
-bilingual content (English required, Indonesian optional).
+A self-hosted flea-market listing app served at `flea-market.akhdan.dev` as a
+Cloudflare Workers Custom Domain. Single-admin CRUD, public browse +
+cart-to-contact flow, bilingual content (English required, Indonesian optional).
 
 Core product model:
 
-1. One owner curates a small catalog (~30 active items) per deployment.
-2. Each deployment targets one city / one default currency (Sendai today;
-   Jakarta next) - driven by env vars, no code or schema changes.
+1. One owner, one site, one catalog (~30 active items at a time).
+2. Items can carry any supported currency; the cart shows per-currency
+   subtotals rather than converting. `DEFAULT_CURRENCY` is the admin form
+   default, not an instance-wide constraint.
 3. Visitors browse, filter, and assemble a cart that generates a structured contact
    message; no payments, no accounts.
 4. The admin authenticates with a single token-cookie; there is no concept of users
@@ -24,12 +24,12 @@ Core product model:
    `ARCHITECTURE.md` #"Cost ceiling".
 3. Prefer explicit, type-safe code over clever; favor clarity since I'll come back
    months later.
-4. Programmatic infrastructure where reasonable. One-time dashboard clicks (R2 custom
-   domain, Image Transformations enablement) are documented in `PLAN.md`; everything
-   else lives in `wrangler.jsonc` or scripts.
+4. Programmatic infrastructure where reasonable. One-time dashboard clicks (Image
+   Transformations enablement, Workers Custom Domain provisioning) are documented in
+   `OPERATIONS.md`; everything else lives in `wrangler.jsonc` or scripts.
 5. Don't introduce scripts, packages, configs, dependencies, env vars, DB columns, or
    files unless they are exercised by code in the same commit.
-6. Don't design for hypothetical future cities, languages, or features. The v2 list in
+6. Don't design for hypothetical future languages or features. The v2 list in
    `ARCHITECTURE.md` #"Future considerations" is the parking lot; do not pre-build for it.
 7. Prefer default tooling behavior until a current requirement justifies customization.
    When a non-default config (TypeScript, Tailwind, Vite, Wrangler) is needed, leave a
@@ -39,10 +39,10 @@ Core product model:
 
 - `ARCHITECTURE.md` - canonical reference for stack, routing strategy, data model,
   money handling, i18n, image pipeline, admin auth, cart flow, configuration, and the
-  free-tier cost ceiling.
-- `PLAN.md` - step-by-step build order. Each step is a deployable unit; do not start
-  the next step until the previous one is live and verified in production.
-- This file (`AGENTS.md`, symlinked as `CLAUDE.md`) - implementation guardrails for
+  free-tier cost ceiling. Also captures non-obvious build/dev-tooling invariants.
+- `OPERATIONS.md` - re-bootstrap and recovery notes: one-time Cloudflare setup, deploy
+  verification, wrangler footguns, secret rotation.
+- This file (`AGENTS.md) - implementation guardrails for
   humans and coding agents.
 
 When a decision in code conflicts with these docs, update the docs in the same commit
@@ -56,13 +56,14 @@ fetches current docs and avoids stale training data.
 
 ### Workflow
 
-1. Each `PLAN.md` step lands as one or more commits, and the next step does not
-   start until the previous step is committed. The default is one commit per step;
-   split a step into multiple commits only when there is a clear reviewability
-   benefit (e.g. isolating raw generator/scaffold output from our customizations,
-   or separating a dependency bump from the code change that consumes it). Splits
-   should be coarse and meaningful, not per-file churn.
-2. After every step, prepare changes and run `pnpm typecheck`, `pnpm lint`, and
+The initial build is shipped (app is feature-complete and live at
+`flea-market.akhdan.dev`). Subsequent work lands as discrete tasks - typically
+one logical change per commit. Split into multiple commits only when there is a
+clear reviewability benefit (e.g. isolating raw generator/scaffold output from
+customizations, or separating a dependency bump from the code change that
+consumes it). Splits should be coarse and meaningful, not per-file churn.
+
+1. After every task, prepare changes and run `pnpm typecheck`, `pnpm lint`, and
    `pnpm format`; then **stop and wait for review**. Agents must NOT run
    `pnpm run deploy`, `wrangler deploy`, or any production-touching command
    without explicit user approval. The user reviews the diff, commits, deploys,
@@ -70,9 +71,10 @@ fetches current docs and avoids stale training data.
    of code; only production verifies correctness of the deployment (Workers Route
    precedence, R2 binding, secrets, Image Transformations, cache) - but that
    verification happens after a human-driven deploy, not before.
-3. If a step turns into a multi-hour rabbit hole, stop and ask before continuing.
-4. Keep `ARCHITECTURE.md` and `PLAN.md` updated when implementation reveals a wrong
-   assumption. The docs are the source of truth, not a historical artifact.
+2. If a task turns into a multi-hour rabbit hole, stop and ask before continuing.
+3. Keep `ARCHITECTURE.md` updated when implementation reveals a wrong assumption.
+   The doc is the source of truth, not a historical artifact. If a one-time
+   setup or recovery procedure changes, update `OPERATIONS.md` too.
 
 ### Code
 
@@ -87,15 +89,15 @@ fetches current docs and avoids stale training data.
 4. Server-only code (DB client, R2 binding, secret reads, request-context helpers
    like `getCookie` / `getRequestHeader` / `setResponseHeader` from
    `@tanstack/react-start/server`) belongs in `createServerFn` handlers or route
-   loaders, never in components. When a helper module touches any of those — and
-   would otherwise be importable from the client — name it `*.server.ts` (e.g.
+   loaders, never in components. When a helper module touches any of those - and
+   would otherwise be importable from the client - name it `*.server.ts` (e.g.
    `src/lib/lang.server.ts`) so TanStack Start's bundler refuses client imports
    at build time instead of letting them fail at runtime.
 5. URL search params are the source of truth for filter/sort state on the list page;
    define their schema with `zod` so TanStack Router can type them.
 6. Enum-shaped column values (`status`, `language`) live as `as const` arrays in
    `src/db/schema.ts` (e.g. `LANGUAGES`, `ITEM_STATUSES`) and are imported
-   wherever runtime validation is needed — type guards, route param checks, toggle
+   wherever runtime validation is needed - type guards, route param checks, toggle
    endpoints. Single source of truth for both the TypeScript union type and the
    runtime allow-list; adding a third language means editing one constant.
 7. Cart state lives only in the Zustand store + localStorage; never persist cart to
@@ -105,12 +107,12 @@ fetches current docs and avoids stale training data.
    consulting shadcn docs, use the Base UI examples (`/docs/components/base/...`),
    not the Radix paths. See `.agents/skills/shadcn/rules/base-vs-radix.md` for the
    API differences (e.g. `render` prop vs `asChild`).
-9. The app is **dark mode only** — `.dark` is set on `<html>` in `src/routes/__root.tsx`.
+9. The app is **dark mode only** - `.dark` is set on `<html>` in `src/routes/__root.tsx`.
    Do not add `next-themes`, a `ThemeProvider`, a toggle, or shadcn's TanStack Start
    `ScriptOnce` recipe; those exist to support user choice, which is an explicit
    non-goal. When overriding a shadcn Button's background on `outline` / `ghost` /
    `secondary` (e.g. a `bg-black/40` photo-overlay), also set the matching `dark:bg-*`
-   variant — those base variants carry `dark:` rules like `dark:bg-input/30` that win
+   variant - those base variants carry `dark:` rules like `dark:bg-input/30` that win
    over a plain `bg-*` override at CSS source order and repaint the button
    white-translucent. See `NAV_BUTTON_CLASS` in `src/components/detail-content.tsx`
    for the pattern.
@@ -129,15 +131,14 @@ fetches current docs and avoids stale training data.
    constraint, a workaround, a free-tier interaction, behavior that would surprise a
    reader.
 2. Don't explain WHAT the code does - well-named identifiers handle that. Don't
-   reference the current task, fix, or callers ("added for the cart flow", "handles
-   issue from PLAN step 7"); those belong in commit messages and rot fast.
+   reference the current task, fix, or callers ("added for the cart flow",
+   "handles issue from the auth rework"); those belong in commit messages and
+   rot fast.
 3. Use `TODO:` for a definite plan to fix (the fix WILL be built when X lands). Use
    `NOTE:` for conditional or deferred behavior (the fix MAY never be built; revisit
    if X happens). Both must state the trigger concretely, not "eventually".
 4. Comments and JSDoc should be readable by a junior engineer. Lead with "what
    breaks" or "how it happens" before naming the fix.
-5. Do not reference `PLAN.md` step numbers in code comments - step numbering shifts.
-   Reference by concept when context is needed, or omit.
 
 ### Commits
 
@@ -163,7 +164,7 @@ fetches current docs and avoids stale training data.
    but the local server accepts any token when no JWT key is configured.
    Schema/seed/check operations against prod require an explicit opt-in: prefix
    with `DB_REMOTE=1` (e.g. `DB_REMOTE=1 pnpm db:push`; also `db:seed`,
-   `db:check`, `db:studio`). `r2:prune` is dual-mode — defaults to local R2,
+   `db:check`, `db:studio`). `r2:prune` is dual-mode - defaults to local R2,
    takes `DB_REMOTE=1` to target prod. Both `drizzle.config.ts` and
    `scripts/_env.ts` honor the flag.
 3. Keep `.dev.vars.prod` and `wrangler secret` in sync. Silent divergence
@@ -211,8 +212,9 @@ writing code.
 
 1. `ARCHITECTURE.md` is the canonical architecture reference (stack, data model,
    routing strategy, invariants).
-2. `PLAN.md` is the execution roadmap.
-3. `CLAUDE.md` / `AGENTS.md` (this file) describes implementation guardrails for
+2. `OPERATIONS.md` is the canonical reference for one-time setup, recovery, and
+   anything that happens outside the repo (Cloudflare dashboard, CLI auth).
+3. `AGENTS.md` (this file) describes implementation guardrails for
    humans and coding agents.
 4. These are living documents - update them when decisions change, and treat them as
    the authoritative source of truth over any conflicting code comment or PR

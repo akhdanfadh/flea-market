@@ -1,6 +1,10 @@
 {
   "name": "flea-market",
   "private": true,
+  "description": "Self-hosted single-admin flea-market listing app on Cloudflare Workers.",
+  "license": "MIT",
+  "author": "Akhdan Fadhilah",
+  "repository": "github:akhdanfadh/flea-market",
   "type": "module",
   "scripts": {
     "build": "vite build",

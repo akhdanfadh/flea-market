@@ -92,9 +92,8 @@ body {
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Gruvbox Dark, mirroring akhdan.dev's theme.css. Hex values (not oklch) keep a
-   1:1 visual match with the apex site - the two domains read as one design family.
-   Source: ../akhdan.dev/assets/css/theme.css */
+/* Gruvbox Dark palette. Hex values (not oklch) on purpose, so the colors
+   stay byte-identical across copies / migrations. */
 .dark {
   /* Tells the browser to paint native chrome (search-input cancel button, scrollbars,
      autofill bg, native focus rings) in dark-mode style. Without this, those controls

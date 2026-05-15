@@ -1,6 +1,6 @@
 # Architecture
 
-A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a dedicated Cloudflare Workers subdomain alongside the existing Hugo site at the apex `akhdan.dev`. Designed to be redeployable in different cities (Sendai today, Jakarta next) by changing environment variables, no code or schema changes.
+A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev` as a Cloudflare Workers Custom Domain. One site, one owner, one catalog spanning every currency the owner needs to list in.
 
 ## Goals and non-goals
 
@@ -21,7 +21,7 @@ A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a 
 - Server-side search engines, full-text search
 - Cross-device cart persistence
 - SEO optimization, sitemaps, RSS
-- Currency conversion across instances (one instance, one default currency)
+- Currency conversion in cart totals (per-currency subtotals stay separate)
 - User-selectable themes (light mode, theme toggle)
 
 ## Stack
@@ -31,59 +31,75 @@ A self-hosted flea-market listing app that lives at `flea-market.akhdan.dev`, a 
 | Framework          | TanStack Start (React)                                                                 | Native Cloudflare Workers target via `@tanstack/react-start/server-entry` |
 | Build              | Vite (built into TanStack Start)                                                       |                                                                           |
 | Deployment         | Cloudflare Workers                                                                     | `wrangler deploy`, `nodejs_compat` flag required                          |
-| Routing on domain  | Cloudflare Workers Custom Domain `flea-market.akhdan.dev`                              | Hugo on Pages continues to serve the apex `akhdan.dev`                    |
+| Routing on domain  | Cloudflare Workers Custom Domain `flea-market.akhdan.dev`                              | Worker is the origin for every path on the subdomain                      |
 | Database           | Turso (libSQL), primary region: Tokyo (`nrt`)                                          | Free tier: 5GB / 500M reads / 10M writes per month                        |
 | DB client          | `@libsql/client`                                                                       | Fetch-based, works in Workers (auto-selects the right entry point)        |
 | ORM                | Drizzle (`drizzle-orm/libsql`)                                                         |                                                                           |
 | Image storage      | Cloudflare R2                                                                          | 10GB free tier; zero egress                                               |
 | Image optimization | Cloudflare Image Transformations on R2-sourced URLs                                    | 5,000 unique transforms/month free; cached forever once generated         |
 | UI components      | shadcn/ui + Tailwind CSS                                                               |                                                                           |
-| Theme              | Gruvbox dark (mirrors akhdan.dev), no toggle                                           | `.dark` stamped on `<html>` at SSR; hex tokens in `src/styles.css`        |
+| Theme              | Gruvbox dark, no toggle                                                                | `.dark` stamped on `<html>` at SSR; hex tokens in `src/styles.css`        |
 | Upload UI          | react-dropzone                                                                         | Drag-and-drop file picker; Worker handles the actual upload to R2         |
 | Cart state         | Zustand + localStorage                                                                 | Client-side only, no server state                                         |
 | Admin auth         | Single token in `env.ADMIN_TOKEN`, SHA-256 + `timingSafeEqual`, httpOnly signed cookie |                                                                           |
 
+## Build and dev tooling
+
+Invariants picked up during scaffolding that aren't obvious from reading the code.
+
+**Vite plugin order**: `@cloudflare/vite-plugin` must be registered before TanStack Start's plugin in `vite.config.ts` - the current scaffold wires it correctly; do not reorder. Wrong order produces opaque SSR-entry resolution failures.
+
+**No `tsx` dev dependency**: Node 22+ runs `.ts` files directly via `--experimental-strip-types` (default on Node 23+), which covers the seed / check / prune scripts. `drizzle-kit` ships its own loader for `drizzle.config.ts`. Adding `tsx` would be dead weight.
+
+**Drizzle: `drizzle-kit push`, not generate+migrate**: at single-deployment scale, pushing the schema directly to Turso on each change is simpler than versioned migration files. If the project ever fans out to multiple instances, switch to `generate` + a runtime migrator.
+
+**`@libsql/client`, not `@tursodatabase/serverless`**: the newer driver is Turso's recommended path for edge runtimes (zero native deps, future concurrent writes), but Drizzle's documented Turso adapter still expects `@libsql/client`. Stick with the documented combination until Drizzle officially adopts the serverless variant.
+
+**Lazy DB client**: `getDb()` constructs the libSQL client per request, not at module top-level. Server fns and route loaders run inside a request context where `env` is available; module-level access during cold start can race with binding setup. Routes that prerender at build time **cannot** read `env` from `cloudflare:workers` - data-driven routes must render at request time.
+
+**`*.server.ts` import-protection rule (TanStack Start)**: imports from `*.server.ts` modules are only allowed where every usage sits inside a `createServerFn(...).handler()` or `createMiddleware(...).server()` body. Chaining `.middleware([m])` does **not** count as a server context. The AST analyzer walks the module that does the importing, not the route that imports it - so a non-`.server.ts` module can re-export server-only helpers as long as the same rule holds inside _that_ module. `src/lib/item-actions.ts` relies on this to share `setItemStatus` between the admin table and the edit page.
+
+**Zod 4.4 + `@hookform/resolvers` 5.2**: the resolver's `zodResolver` types reject Zod 4.4 (it expects `_zod.version.minor === 0`). Use `standardSchemaResolver` from `@hookform/resolvers/standard-schema` instead - Zod 4 implements Standard Schema natively.
+
+**Sonner deduplication**: keep a single global `<Toaster>` in `src/routes/__root.tsx`. Sonner dedupes mounts by `toasterId`, so two `<Toaster>`s with the default id render every `toast.success()` in both. If a scoped Toaster is ever needed (e.g. admin-only), give it a distinct `id` prop.
+
+**Lefthook ASCII sanitizers** (`lefthook.yml`): sanitizer jobs that rewrite staged files must `exclude: "lefthook*.yml"`, otherwise `stage_fixed` will rewrite the sanitizers' own patterns the first time `lefthook.yml` is staged. Substitutions use `perl -Mutf8 -CSD -i -pe` so the rule is portable across BSD and GNU `sed`.
+
 ## High-level diagram
 
 ```text
-              akhdan.dev (zone)
-                    |
-        +-----------+--------------------+
-        |                                |
-   akhdan.dev                  flea-market.akhdan.dev
-   (apex zone)                 (Custom Domain)
-        |                                |
-        v                                v
-  Cloudflare Pages                 Cloudflare Worker
-  (Hugo static site)               (TanStack Start)
-                                         |
-                                         +-----> Turso (libSQL, Tokyo)   <- item data, translations
-                                         +-----> Cloudflare R2           <- photo originals
-                                         +-----> /cdn-cgi/image/...      <- on-the-fly resize/format
+   flea-market.akhdan.dev
+       (Custom Domain)
+              |
+              v
+       Cloudflare Worker
+       (TanStack Start)
+              |
+              +-----> Turso (libSQL, Tokyo)   <- item data, translations
+              +-----> Cloudflare R2           <- photo originals
+              +-----> /cdn-cgi/image/...      <- on-the-fly resize/format
 ```
 
 ## Routing strategy
 
-Two Cloudflare products on the same zone, split by hostname (not path):
-
-1. The flea-market app is deployed as a Worker (not a Pages app) and attached to a Cloudflare Workers Custom Domain on the subdomain `flea-market.akhdan.dev`. The Worker is the origin for the entire subdomain — every path lands on the Worker.
-2. Hugo on Pages remains the origin for `akhdan.dev` and any other apex paths. The two are independent; no path-precedence arbitration is needed.
-3. `wrangler deploy` auto-provisions the subdomain's DNS record and TLS certificate. No DNS clicking in the dashboard.
+1. The flea-market app is deployed as a Worker (not a Pages app) and attached to a Cloudflare Workers Custom Domain on the subdomain `flea-market.akhdan.dev`. The Worker is the origin for the entire subdomain - every path lands on the Worker.
+2. `wrangler deploy` auto-provisions the subdomain's DNS record and TLS certificate. No DNS clicking in the dashboard.
 
 Why subdomain instead of sub-path: TanStack Start + Cloudflare Workers Static Assets does not support a basepath-mounted deployment cleanly. Cloudflare's static-asset layer requires the disk layout to mirror the URL prefix, but Vite's `base` only rewrites HTML URLs without moving files. The framework's own examples deploy at a domain root for this reason. A subdomain Custom Domain sidesteps the entanglement entirely.
 
 Caveats:
 
-- Always use `<Link>` from TanStack Router for internal navigation rather than hardcoded `href` strings. Reason is no longer "basepath rewriting" but client-side routing benefits (preload-on-intent, scroll restoration, no full reload). The only exception is `/lang/$lang` — a server-only endpoint that 302s with a `Set-Cookie`; a `<Link>` would skip the response. Those toggles render as raw `<a>` elements.
+- Always use `<Link>` from TanStack Router for internal navigation rather than hardcoded `href` strings. Reason is no longer "basepath rewriting" but client-side routing benefits (preload-on-intent, scroll restoration, no full reload). The only exception is `/lang/$lang` - a server-only endpoint that 302s with a `Set-Cookie`; a `<Link>` would skip the response. Those toggles render as raw `<a>` elements.
+- The router config sets `trailingSlash: 'always'`. Cloudflare Workers Static Assets defaults to auto-trailing on the root, so `flea-market.akhdan.dev` always 307s to `flea-market.akhdan.dev/`; aligning sub-routes to the same convention keeps URL shape consistent across root and sub-paths. Route refs in `Link` and `navigate` must include the trailing slash (e.g. `/admin/$slug/edit/`); typecheck catches mismatches.
 
 ### Item detail: modal-over-list with route mask
 
 Two routes serve the detail content:
 
-- `/$slug/` — the standalone detail page. SSR'd; renders on direct nav, refresh, share-link load.
+- `/$slug/` - the standalone detail page. SSR'd; renders on direct nav, refresh, share-link load.
 - The same `DetailContent` component rendered inside a `<Dialog>` overlay on `/` when `search.item` is set.
 
-In-app card clicks navigate to `/` with `?item=<slug>` plus a TanStack Router `routeMask` of `to: "/$slug/", params: { slug }`. The router renders the list route (matching `/`) and the modal opens, but the URL bar displays `/$slug/`. `unmaskOnReload: true` means a refresh on the masked URL bypasses the mask entirely and the server renders the standalone `/$slug/` route — shared links degrade to the full page exactly like Instagram's `/p/<id>` pattern.
+In-app card clicks navigate to `/` with `?item=<slug>` plus a TanStack Router `routeMask` of `to: "/$slug/", params: { slug }`. The router renders the list route (matching `/`) and the modal opens, but the URL bar displays `/$slug/`. `unmaskOnReload: true` means a refresh on the masked URL bypasses the mask entirely and the server renders the standalone `/$slug/` route - shared links degrade to the full page exactly like Instagram's `/p/<id>` pattern.
 
 Modifier-click / right-click on a card falls through to the Link's real `href="/$slug/"`, opening the standalone page in a new tab as the user expects.
 
@@ -119,7 +135,7 @@ Constraints:
 
 Application-level rule: every item must have at least one `en` translation before save. Enforced in the create/edit logic, not in the DB schema, since SQLite triggers for this kind of constraint are clunky.
 
-**Encoding split: content vs. slug.** Title and description fields accept full UTF-8 — Japanese, accented Latin, anything renders. The page already pulls Noto Sans + Noto Sans JP, so CJK text displays in the right font without additional work. Slugs are deliberately constrained to ASCII alphanumerics + hyphens (`SLUG_PATTERN`) so URLs stay readable and shareable regardless of what the title contains. `slugifyTitle` strips non-ASCII when auto-generating: a Japanese-only title yields just the date prefix (`20260515`), a mixed title like `"Kotatsu heated table コタツ"` yields `20260515-kotatsu-heated-table`. The admin can manually edit the slug via the "Edit slug" affordance for items where the auto-derived ASCII portion isn't what they want.
+**Encoding split: content vs. slug.** Title and description fields accept full UTF-8 - Japanese, accented Latin, anything renders. The page already pulls Noto Sans + Noto Sans JP, so CJK text displays in the right font without additional work. Slugs are deliberately constrained to ASCII alphanumerics + hyphens (`SLUG_PATTERN`) so URLs stay readable and shareable regardless of what the title contains. `slugifyTitle` strips non-ASCII when auto-generating: a Japanese-only title yields just the date prefix (`20260515`), a mixed title like `"Kotatsu heated table コタツ"` yields `20260515-kotatsu-heated-table`. The admin can manually edit the slug via the "Edit slug" affordance for items where the auto-derived ASCII portion isn't what they want.
 
 **Draft status**
 
@@ -171,13 +187,13 @@ A single cookie `lang` (values `en` or `id`), `Path=/`, 1-year expiry. The serve
 2. `Accept-Language` header parsed for `en` / `id` (any other value falls through)
 3. `env.DEFAULT_LANGUAGE` (defaults to `en`)
 
-The resolved language is returned from the root loader so `<html lang={...}>` and every page loader see the correct value — SSR renders the right translation on first paint, no client-side flip after hydration.
+The resolved language is returned from the root loader so `<html lang={...}>` and every page loader see the correct value - SSR renders the right translation on first paint, no client-side flip after hydration.
 
 **Toggle endpoint**:
 
-`GET /lang/$lang` (`src/routes/lang/$lang.ts`) validates the param against the `LANGUAGES` constant in `src/db/schema.ts`, sets the cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `HttpOnly`, plus `Secure` only when the request is HTTPS), then 302-redirects to `Referer` (compared by `URL.origin`, not hostname, so port/scheme mismatch is caught; falls back to `/` on missing / unparsable / cross-origin). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable. `HttpOnly` is included as defense-in-depth — `getLanguage()` reads the cookie server-side, no JS read path exists; revisit if a concrete client-side reader ever lands.
+`GET /lang/$lang` (`src/routes/lang/$lang.ts`) validates the param against the `LANGUAGES` constant in `src/db/schema.ts`, sets the cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Lax`, `HttpOnly`, plus `Secure` only when the request is HTTPS), then 302-redirects to `Referer` (compared by `URL.origin`, not hostname, so port/scheme mismatch is caught; falls back to `/` on missing / unparsable / cross-origin). The toggle button in the UI is a plain `<a>` to this endpoint; a full page reload is acceptable. `HttpOnly` is included as defense-in-depth - `getLanguage()` reads the cookie server-side, no JS read path exists; revisit if a concrete client-side reader ever lands.
 
-`Secure` is gated on the request protocol so the toggle works in dev over LAN IPs (e.g. `http://192.168.x.x:3000` for phone testing). Browsers exempt `localhost` from the `Secure` requirement but not LAN IPs — a blanket `Secure` would silently drop the cookie there. Production always serves over HTTPS, so `Secure` is always emitted in prod.
+`Secure` is gated on the request protocol so the toggle works in dev over LAN IPs (e.g. `http://192.168.x.x:3000` for phone testing). Browsers exempt `localhost` from the `Secure` requirement but not LAN IPs - a blanket `Secure` would silently drop the cookie there. Production always serves over HTTPS, so `Secure` is always emitted in prod.
 
 **Translation lookup**:
 
@@ -205,8 +221,8 @@ Photos are server state on the edit page. Removal (`removeItemPhoto`), reorder (
 
 Serving:
 
-- The Worker proxies R2 originals at `/images/<key>` via the `BUCKET` binding (see `src/routes/images/$.ts`). Cache headers (`Cache-Control: public, max-age=31536000, immutable` + `ETag`) let Cloudflare's edge cache transformed variants forever after first generation, so the Worker is invoked only on cache miss
-- The app renders images with Cloudflare's image transformation URL prefix, using a relative path source (resolves against the current zone — no R2 custom domain or env var needed):
+- The Worker proxies R2 originals at `/images/<key>` via the `BUCKET` binding (see `src/routes/images/$.ts`). The splat handler wraps `decodeURIComponent` in try/catch and returns 400 on malformed input - a lone `%` in the path otherwise throws `URIError` and 500s. Responses set `Cache-Control: public, max-age=31536000, immutable`, `ETag` from `obj.httpEtag`, and `X-Content-Type-Options: nosniff` (defense-in-depth against polyglot files). The aggressive cache headers let Cloudflare's edge cache transformed variants forever after first generation, so the Worker is invoked only on cache miss
+- The app renders images with Cloudflare's image transformation URL prefix, using a relative path source (resolves against the current zone - no R2 custom domain or env var needed):
 
   ```text
   /cdn-cgi/image/width={w},quality=75,format=auto/images/{key}
@@ -219,7 +235,7 @@ Why proxy through the Worker instead of a public R2 custom domain: an R2 custom 
 
 Counts: ~30 items × 3 variants = 90 unique transformations. The 5,000/month free tier is never close to threatened.
 
-**Dev-mode bypass.** In `pnpm dev` (Miniflare), Cloudflare's edge image transformer at `/cdn-cgi/image` is not emulated. `optimizedImageUrl(key, ...)` in `src/lib/images.ts` checks `import.meta.env.DEV` and returns the raw `/images/<key>` Worker-proxy URL in that case. Production goes through the transformer as normal. The trade-off: dev list pages download full-size originals (no width=400 thumbnails), so a 3MB phone photo will feel noticeably heavier in dev than in prod — fine for the seed fixtures, watch for it once real photos land.
+**Dev-mode bypass.** In `pnpm dev` (Miniflare), Cloudflare's edge image transformer at `/cdn-cgi/image` is not emulated. `optimizedImageUrl(key, ...)` in `src/lib/images.ts` checks `import.meta.env.DEV` and returns the raw `/images/<key>` Worker-proxy URL in that case. Production goes through the transformer as normal. The trade-off: dev list pages download full-size originals (no width=400 thumbnails), so a 3MB phone photo will feel noticeably heavier in dev than in prod - fine for the seed fixtures, watch for it once real photos land.
 
 ## Admin auth
 
@@ -248,6 +264,8 @@ The payload is intentionally a constant. A single-admin app has nothing per-sess
 - Validation happens in a pathless `/admin/_auth` layout's `beforeLoad` (via a `createServerFn` so `HttpOnly` cookies stay readable) so the check isn't repeated across handlers
 - Failed validation redirects to `/admin/login/`
 - `/admin/api/upload` keeps its own auth check that accepts either Bearer (CLI/curl) or the `admin_session` cookie (browser form), returning a real 401 rather than a 302
+
+**`beforeLoad` does not guard server fns.** The `_auth` layout's `beforeLoad` only gates the route render - a `createServerFn` RPC endpoint is reachable by anyone who POSTs to it directly. Every mutating server fn (`createDraftItem`, `updateItem`, `deleteItem`, `setItemStatus`, `removeItemPhoto`, `setItemPhotoOrder`, `setItemPhotoAlt`, and any future addition) calls `isAdminSession(getCookie(...), env.COOKIE_SECRET)` at the top of its handler. `/admin/api/upload` is self-authenticating (Bearer + cookie, see above). Layout-level guards are not sufficient for state-mutating endpoints.
 
 **Logout**:
 
@@ -293,7 +311,7 @@ The gate is enforced at two layers: the `StatusSelect` dropdown disables the pub
 
 Client-side, no DB involvement.
 
-**State**: a Zustand store holds `Set<itemSlug>` in memory and persists to `localStorage` under key `flea-market:cart` as `string[]` (asymmetric in/on-disk shape avoids pulling in `superjson` for a one-off `Set` round-trip). Rehydration is gated by `useHasMounted` so SSR + persist don't disagree on the FAB count. The store keys items by `slug`, not `id` - slugs are admin-editable, so a slug rename silently drops the row from any cart that still holds the old value (acceptable at single-admin scale). A hard `CART_LIMIT = 50` in `src/lib/cart-constants.ts` is shared with the server fn's Zod validator. Cross-tab sync is not wired (Zustand `persist` v5 doesn't subscribe to the `storage` event); two tabs of the public site drift their cart state until reload.
+**State**: a Zustand store holds `Set<itemSlug>` in memory and persists to `localStorage` under key `flea-market:cart` as `string[]` (asymmetric in/on-disk shape avoids pulling in `superjson` for a one-off `Set` round-trip). The conversion uses Zustand's `partialize` (Set → array on write) + `merge` (array → Set on rehydrate); `persist`'s older `serialize`/`deserialize` options are deprecated. Rehydration is gated by `useHasMounted` so SSR + persist don't disagree on the FAB count. The store keys items by `slug`, not `id` - slugs are admin-editable, so a slug rename silently drops the row from any cart that still holds the old value (acceptable at single-admin scale). A hard `CART_LIMIT = 50` in `src/lib/cart-constants.ts` is shared with the server fn's Zod validator. Cross-tab sync is not wired (Zustand `persist` v5 doesn't subscribe to the `storage` event); two tabs of the public site drift their cart state until reload.
 
 **UI**:
 
@@ -309,10 +327,10 @@ Client-side, no DB involvement.
 
 - Read-only textarea showing the generated message in the current page language (EN or ID template). Item titles localize via the loader's resolved language; UI chrome (badges, banners, button labels) stays English-only.
 - Three actions stacked vertically next to a small LINE QR image (left-aligned heading "Scan QR or reach me via:"):
-  - **Copy message**: synchronous `navigator.clipboard.writeText()`, surfaces a Sonner toast on success or failure. Standalone button so the visitor reviews the prefilled text first, then chooses a channel.
+  - **Copy message**: synchronous `navigator.clipboard.writeText()`, surfaces a Sonner toast on success or failure. Standalone button so the visitor reviews the prefilled text first, then chooses a channel. `navigator.clipboard.writeText` fails silently on non-HTTPS - verify on the deployed origin, not `localhost`.
   - **Messenger contact button**: opens `https://m.me/{FB_HANDLE}` in a new tab. Synchronous `window.open` inside the click handler so iOS Safari's user-gesture popup gate accepts the navigation.
   - **LINE contact button**: opens `https://{LINE_HANDLE}` in a new tab. Same gesture-synchronous open.
-- Static LINE QR image at `public/line-qr.jpg` rendered inline (no modal). The image is checked in next to the env var that drives it - if a redeploy changes `LINE_HANDLE`, regenerate the image to match.
+- Static LINE QR image served from R2 at `/images/static/line-qr.jpg`, rendered inline (no modal). The QR is deployer-supplied (upload via `wrangler r2 object put flea-market/static/line-qr.jpg ...`; see `OPERATIONS.md`); `r2:prune` is configured to skip the `static/` prefix so the object isn't treated as orphan. If `LINE_HANDLE` changes, regenerate and re-upload.
 - The contact section is always visible (independent of cart contents) so a visitor can reach the seller even with an empty / all-sold cart.
 
 ## Configuration
@@ -331,10 +349,12 @@ Client-side, no DB involvement.
     "DEFAULT_CURRENCY": "JPY",
     "SUPPORTED_CURRENCIES": "JPY,IDR,USD",
     "DEFAULT_LANGUAGE": "en",
-    // Display URLs minus protocol (e.g. "m.me/akhdanfadh", "line.me/ti/p/...").
-    // The cart drawer renders these verbatim and prepends https:// when
-    // opening the new tab. LINE_HANDLE pairs with the static QR image at
-    // public/line-qr.jpg - regenerate that image if the handle changes.
+    // Display URLs minus protocol. Placeholders in vars; the deployer
+    // overrides via `wrangler secret put FB_HANDLE` / `wrangler secret put
+    // LINE_HANDLE` so real handles never land in the repo. The cart drawer
+    // renders these verbatim and prepends https:// when opening the new tab.
+    // LINE_HANDLE pairs with a static QR object at `static/line-qr.jpg` in
+    // R2 (served via `/images/static/line-qr.jpg`); see OPERATIONS.md.
     "FB_HANDLE": "m.me/your-handle",
     "LINE_HANDLE": "line.me/ti/p/your-line-id",
   },
@@ -354,7 +374,7 @@ Client-side, no DB involvement.
 
 `.dev.vars` points at a local libSQL server on `http://127.0.0.1:8080`,
 started by `pnpm db:local` (which wraps `turso dev --db-file .turso/local.db`).
-`TURSO_AUTH_TOKEN=local-unused` is a placeholder — drizzle-kit refuses an
+`TURSO_AUTH_TOKEN=local-unused` is a placeholder - drizzle-kit refuses an
 empty value, but the local server accepts any token. Wrangler loads
 `.dev.vars` automatically into Miniflare; drizzle-kit and the helper scripts
 read it via `process.loadEnvFile`.
@@ -375,8 +395,9 @@ matches the DB target.
 ## Deployment
 
 - `pnpm run deploy` runs `vite build && wrangler deploy`
-- The Workers Custom Domain (`flea-market.akhdan.dev`) is declared in `wrangler.jsonc` and provisioned on deploy — DNS record and TLS certificate are created automatically the first time
-- **`wrangler deploy` is additive for triggers, not reconciliatory.** Routes removed from `wrangler.jsonc` are **not** automatically cleaned off the zone — `wrangler triggers deploy` does not remove orphans either. Stale route bindings keep intercepting traffic. To clean up, delete via the Cloudflare dashboard (Workers -> Triggers -> Routes) or the REST API: `DELETE /zones/{zone_id}/workers/routes/{route_id}`. List existing routes with `GET /zones/{zone_id}/workers/routes`. The wrangler OAuth token at `~/Library/Preferences/.wrangler/config/default.toml` has the `workers_routes:write` scope and works as a `Bearer` token
+- The Workers Custom Domain (`flea-market.akhdan.dev`) is declared in `wrangler.jsonc` and provisioned on deploy - DNS record and TLS certificate are created automatically the first time
+- The `flea-market.<account>.workers.dev` URL stays disabled when a Custom Domain is set, unless `"workers_dev": true` is added to `wrangler.jsonc`. Useful as a debug bypass if the Custom Domain misbehaves; currently off
+- **`wrangler deploy` is additive for triggers, not reconciliatory.** Routes removed from `wrangler.jsonc` are **not** automatically cleaned off the zone - `wrangler triggers deploy` does not remove orphans either. Stale route bindings keep intercepting traffic. To clean up, delete via the Cloudflare dashboard (Workers -> Triggers -> Routes) or the REST API: `DELETE /zones/{zone_id}/workers/routes/{route_id}`. List existing routes with `GET /zones/{zone_id}/workers/routes`. The wrangler OAuth token at `~/Library/Preferences/.wrangler/config/default.toml` has the `workers_routes:write` scope and works as a `Bearer` token
 - R2 bucket is created once via `wrangler r2 bucket create flea-market`. No public custom domain is provisioned; the Worker serves originals at `/images/<key>` via the `BUCKET` binding (see Image pipeline)
 - Image Transformations is enabled per-zone in the Cloudflare dashboard (one-time). Because the source URL is on the same zone as the transformer, no entry in Images > Transformations > Sources is required
 - Turso DB is created via `turso db create flea-market --group <group>`. Groups carry the location; on a fresh Turso account a `default` group typically already exists in the region tied to the signup, and `turso group list` shows existing groups. Use `turso group create <name> --location nrt` to provision Tokyo if no Tokyo group exists yet
@@ -403,4 +424,3 @@ Out of scope for v1 but cheap to add later:
 - Telegram or Discord webhook on new item creation (so a public channel auto-announces)
 - An RSS feed if listings get heavy enough to warrant it
 - Per-item view counter (one Turso column, increment in the detail-page loader)
-- Multi-instance deploy automation (a fresh Turso DB + Worker + R2 bucket for a new city) - at that point, Terraform earns its place

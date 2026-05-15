@@ -1,6 +1,6 @@
-// AF mark, copied from akhdan.dev/layouts/_partials/icons/logo.html.
-// Sized via the parent's font-size (1em); the circular foreground/background
-// pairing is supplied by the wrapper <span>.
+// Owner's monogram, rendered inside a foreground-filled circle. Sized via the
+// parent's font-size (1em); the circular foreground/background pairing is
+// supplied by the wrapper <span>.
 export function SiteLogo() {
   return (
     <span className="inline-flex rounded-full bg-foreground text-background">

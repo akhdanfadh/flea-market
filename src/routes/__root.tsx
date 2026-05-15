@@ -15,15 +15,14 @@ import appCss from "@/styles.css?url";
 const loadRootContext = createServerFn({ method: "GET" }).handler(() => ({
   language: getLanguage(),
   // Public vars exposing the seller's contact-link surfaces. Stored as the
-  // display URL minus protocol (e.g. "m.me/akhdanfadh", "line.me/ti/p/...").
+  // display URL minus protocol (e.g. "m.me/your-handle", "line.me/ti/p/...").
   // The cart drawer shows these verbatim as button labels and prepends
   // https:// when opening the new tab.
   fbHandle: env.FB_HANDLE,
   lineHandle: env.LINE_HANDLE,
   // Request-derived origin (e.g. "https://flea-market.akhdan.dev") feeds the
   // cart drawer's message-body URLs. Derived here instead of hardcoded so a
-  // multi-instance redeploy (Jakarta etc.) emits the correct host without
-  // a code change.
+  // domain change emits the correct host without a code change.
   origin: getRequestUrl().origin,
 }));
 

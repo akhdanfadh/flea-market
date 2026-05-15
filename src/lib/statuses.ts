@@ -25,7 +25,7 @@ export const STATUS_LABEL: Record<ItemStatus, string> = {
 };
 
 // Tailwind classes for the admin status pickers and chips. Each entry
-// overrides the outline variant's `dark:bg-input/30` rule (CLAUDE.md
+// overrides the outline variant's `dark:bg-input/30` rule (AGENTS.md
 // section 4 rule 9 - a plain `bg-*` loses the cascade against the
 // `dark:` variant the base classes carry). Co-located with STATUS_LABEL
 // so adding a status touches one file.

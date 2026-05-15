@@ -6,9 +6,9 @@
 // the admin form share one source of truth.
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/;
 
-// Date portion uses local time on purpose: the admin's calendar (Sendai today,
-// Jakarta next) is what visitors see. UTC would put a 9-hour offset between
-// what the admin typed and what the URL says on the same day.
+// Date portion uses local time on purpose: the admin's local calendar is what
+// visitors see. UTC would put a multi-hour offset between what the admin
+// typed and what the URL says on the same day.
 export function slugifyTitle(title: string, date: Date = new Date()): string {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, "0");
