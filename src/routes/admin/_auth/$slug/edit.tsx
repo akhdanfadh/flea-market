@@ -166,7 +166,7 @@ const removeItemPhoto = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = getDb();
     const found = await db
-      .select({ photos: items.photos })
+      .select({ status: items.status, photos: items.photos })
       .from(items)
       .where(eq(items.id, data.id))
       .limit(1);
@@ -179,6 +179,12 @@ const removeItemPhoto = createServerFn({ method: "POST" })
     // bogus key; the explicit existence check makes the no-op case loud.
     const target = row.photos.find((p) => p.key === data.key);
     if (!target) return;
+    // Symmetric to setItemStatus's entry gate: a published row always
+    // keeps >=1 photo. The unpublish path (any -> draft) clears this
+    // constraint, so the admin can wipe photos by moving to draft first.
+    if (row.status !== "draft" && row.photos.length === 1) {
+      throw new Error("Move to draft before removing the last photo.");
+    }
     const photos = row.photos.filter((p) => p.key !== data.key);
     await db.update(items).set({ photos }).where(eq(items.id, data.id));
     // Best-effort R2 delete; same rationale as deleteItem.
@@ -556,6 +562,10 @@ function EditItemPage() {
   }
 
   function removePhoto(key: string) {
+    // Belt-and-suspenders with PhotoGrid's disabled state: a keyboard
+    // activation or stale render shouldn't slip past the published-row
+    // photo-gate. Server enforces the same in removeItemPhoto.
+    if (photos.length === 1 && status !== "draft") return;
     // Read+compute via the ref (synchronous mirror of pendingRemovals) so
     // we don't fire side effects from inside a setState updater. setState
     // itself stays straightforward.
@@ -733,12 +743,15 @@ function EditItemPage() {
         />
         <PhotoGrid
           photos={photos}
+          canRemoveLast={status === "draft"}
           onReorder={reorderPhotos}
           onRemove={removePhoto}
           onAltChange={changePhotoAlt}
         />
         <p className="text-xs text-muted-foreground">
-          First photo is the cover thumbnail. Drag the grip handle to reorder.
+          First photo is the cover thumbnail. Drag the grip handle to reorder. Published item should
+          have at least one photo.
+          {status !== "draft" && " Change item to draft to remove the last photo."}
         </p>
       </section>
 

@@ -19,11 +19,17 @@ import { optimizedImageUrl } from "@/lib/images.ts";
 // component just renders what it's given.
 export function PhotoGrid({
   photos,
+  canRemoveLast,
   onReorder,
   onRemove,
   onAltChange,
 }: {
   photos: ItemPhoto[];
+  // Mirrors setItemStatus's entry gate: a published row must keep >=1
+  // photo. The parent sets this to `status === "draft"`; when false, the
+  // last visible photo's remove button is disabled. Server enforces the
+  // same rule in removeItemPhoto - this is just the UX side.
+  canRemoveLast: boolean;
   onReorder: (next: ItemPhoto[]) => void;
   onRemove: (key: string) => void;
   onAltChange: (key: string, alt: string) => void;
@@ -64,6 +70,7 @@ export function PhotoGrid({
               key={photo.key}
               photo={photo}
               isFirst={idx === 0}
+              removeDisabled={photos.length === 1 && !canRemoveLast}
               onRemove={() => onRemove(photo.key)}
               onAltChange={(alt) => onAltChange(photo.key, alt)}
             />
@@ -80,11 +87,13 @@ const OVERLAY_BUTTON =
 function SortablePhoto({
   photo,
   isFirst,
+  removeDisabled,
   onRemove,
   onAltChange,
 }: {
   photo: ItemPhoto;
   isFirst: boolean;
+  removeDisabled: boolean;
   onRemove: () => void;
   onAltChange: (alt: string) => void;
 }) {
@@ -124,6 +133,7 @@ function SortablePhoto({
           size="icon"
           className={`absolute top-1 right-1 size-7 ${OVERLAY_BUTTON}`}
           onClick={onRemove}
+          disabled={removeDisabled}
           aria-label="Remove photo"
         >
           <XIcon className="size-3.5" />
