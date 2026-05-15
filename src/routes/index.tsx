@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { DetailItem } from "@/components/detail-content.tsx";
 import type { PublicItemStatus } from "@/lib/statuses.ts";
 
+import { CartToggleButton } from "@/components/cart-toggle-button.tsx";
 import { DetailContent, StatusBanner } from "@/components/detail-content.tsx";
 import { PricePill } from "@/components/price-pill.tsx";
 import { Button } from "@/components/ui/button";
@@ -327,41 +328,49 @@ function Home() {
           {filtered.map(({ item, translation }) => (
             <li key={item.id}>
               <Card className="overflow-hidden pt-0 pb-4 transition hover:shadow-md">
-                {/* Photo area: plain click opens the in-place modal (via the onClick
-                    intercept). Cmd/middle/right-click falls through to the Link's
-                    /$slug/ href, opening the standalone page in a new tab. */}
-                <Link
-                  to="/$slug/"
-                  params={{ slug: item.slug }}
-                  onClick={onCardClick(item.slug)}
-                  // Photo click opens the modal (onClick preventDefault), so a
-                  // hover-preload of /$slug/'s loader would be discarded. The title
-                  // Link below keeps preload-on-intent because clicking it really
-                  // does navigate to the standalone page.
-                  preload={false}
-                  className="block"
-                >
-                  <div className="relative">
-                    {item.photos.length > 0 ? (
-                      <img
-                        src={optimizedImageUrl(item.photos[0]!.key, { width: 400 })}
-                        alt={item.photos[0]!.alt ?? translation.title}
-                        className="aspect-square w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-                        No photo
-                      </div>
-                    )}
-                    <StatusBanner status={item.status} />
-                    <PricePill
-                      amount={item.priceAmount}
-                      currency={item.priceCurrency}
-                      size="card"
+                {/* Photo area: the Link is an absolute overlay (z-10) covering
+                    the photo for clicks; the cart toggle is a sibling at z-20
+                    so its own clicks resolve before reaching the Link. This
+                    keeps the structure HTML-valid - nesting <button> inside
+                    <a> is disallowed by the spec and bites assistive tech.
+                    Plain click on the photo opens the in-place modal (via
+                    onCardClick's preventDefault). Cmd/middle/right-click on
+                    the photo falls through to the Link's /$slug/ href. */}
+                <div className="relative">
+                  {item.photos.length > 0 ? (
+                    <img
+                      src={optimizedImageUrl(item.photos[0]!.key, { width: 400 })}
+                      alt={item.photos[0]!.alt ?? translation.title}
+                      className="aspect-square w-full object-cover"
+                      loading="lazy"
                     />
-                  </div>
-                </Link>
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                      No photo
+                    </div>
+                  )}
+                  <StatusBanner status={item.status} />
+                  <PricePill amount={item.priceAmount} currency={item.priceCurrency} size="card" />
+                  <Link
+                    to="/$slug/"
+                    params={{ slug: item.slug }}
+                    onClick={onCardClick(item.slug)}
+                    // Photo click opens the modal (onClick preventDefault), so a
+                    // hover-preload of /$slug/'s loader would be discarded. The title
+                    // Link below keeps preload-on-intent because clicking it really
+                    // does navigate to the standalone page.
+                    preload={false}
+                    // The title Link in <CardHeader> below carries the accessible
+                    // name. Hiding this Link from a11y prevents a screen reader
+                    // from announcing the same title twice per card; tabIndex=-1
+                    // keeps it out of the keyboard tab order for the same reason.
+                    // Mouse / touch clicks still fire onClick and open the modal.
+                    aria-hidden
+                    tabIndex={-1}
+                    className="absolute inset-0 z-10"
+                  />
+                  <CartToggleButton slug={item.slug} status={item.status} variant="card" />
+                </div>
                 {/* Title: plain Link to the standalone /$slug/ page. No onClick
                     intercept, so a regular click does an SPA nav to the full detail
                     page (not the modal). Underlines on hover for affordance. */}

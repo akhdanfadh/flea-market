@@ -293,24 +293,27 @@ The gate is enforced at two layers: the `StatusSelect` dropdown disables the pub
 
 Client-side, no DB involvement.
 
-**State**: a Zustand store holds `Set<itemSlug>`, persisted to `localStorage` under key `flea-market:cart` (a storage namespace, unrelated to URL paths). Initialized from localStorage on app mount.
+**State**: a Zustand store holds `Set<itemSlug>` in memory and persists to `localStorage` under key `flea-market:cart` as `string[]` (asymmetric in/on-disk shape avoids pulling in `superjson` for a one-off `Set` round-trip). Rehydration is gated by `useHasMounted` so SSR + persist don't disagree on the FAB count. The store keys items by `slug`, not `id` - slugs are admin-editable, so a slug rename silently drops the row from any cart that still holds the old value (acceptable at single-admin scale). A hard `CART_LIMIT = 50` in `src/lib/cart-constants.ts` is shared with the server fn's Zod validator. Cross-tab sync is not wired (Zustand `persist` v5 doesn't subscribe to the `storage` event); two tabs of the public site drift their cart state until reload.
 
 **UI**:
 
-- Each item card on the list and detail pages shows an "Add to cart" / "Remove" button (toggled by cart membership)
-- A floating badge in the corner shows cart count; clicking it opens a Sheet (shadcn)
-- The Sheet lists selected items with title, price, remove button
-- A "Total" section sums prices per currency (so a JPY + USD cart shows `¥5,000 + $50.00`)
-- Free items appear in the list with a "Free" badge and don't contribute to the total
-- Reserved or sold items that are still in the cart from a previous session appear with the relevant badge, are excluded from the message, and trigger a banner
+- Each item card on the list and detail pages shows an "Add to cart" / "Remove" button (toggled by cart membership). On `sold` and `draft` items the button is absent (no false affordance); `available` and `reserved` both render it. On list cards the toggle is a bottom-right overlay chip; on the detail page / modal it's a full-width button below the title.
+- A fixed bottom-right pill (icon + "Cart" label + count badge) is the Sheet trigger, mounted globally in `__root.tsx`. Hidden on `/admin/*` (admin is the seller, "cart to yourself" makes no sense).
+- The Sheet drawer (right-anchored, full-width on mobile, max `sm:max-w-md` on `sm+`) lists selected items with thumbnail, title, price, per-row remove button.
+- A "Total" section sums prices per currency (so a JPY + USD cart shows `¥5,000 + $50.00`).
+- Free items appear in the list with a green "Free" pill and don't contribute to the total.
+- Reserved items remain in the message body with an inline `[Reserved]` tag - the visitor's intent is "I know it's taken; flag me if it falls through" and the tag signals that to the seller. Sold items render dimmed in the list but are excluded from the message body and from totals. A unified "Some items in your cart are no longer available" banner appears whenever sold rows or missing-from-server rows (slug went to draft / was deleted) exist, with a one-click "Remove unavailable items" cleanup.
+- The drawer re-fetches per-item data only on Sheet open or explicit retry, not on every cart mutation, so a remove can't trigger a spurious refresh-failure toast immediately after the visitor's own action. Optimistic render-time filter handles the visual diff.
 
 **Contact section**:
 
-- Read-only textarea showing the generated message in the current page language (EN or ID template)
-- Three buttons:
-  - **Copy & open Facebook**: copies the message to clipboard via `navigator.clipboard.writeText()`, then opens `https://m.me/{FB_HANDLE}` in a new tab
-  - **Show LINE QR**: opens a modal with the LINE QR code (static image in `/public/`)
-  - **Copy message**: copies to clipboard, shows a "Copied!" toast
+- Read-only textarea showing the generated message in the current page language (EN or ID template). Item titles localize via the loader's resolved language; UI chrome (badges, banners, button labels) stays English-only.
+- Three actions stacked vertically next to a small LINE QR image (left-aligned heading "Scan QR or reach me via:"):
+  - **Copy message**: synchronous `navigator.clipboard.writeText()`, surfaces a Sonner toast on success or failure. Standalone button so the visitor reviews the prefilled text first, then chooses a channel.
+  - **Messenger contact button**: opens `https://m.me/{FB_HANDLE}` in a new tab. Synchronous `window.open` inside the click handler so iOS Safari's user-gesture popup gate accepts the navigation.
+  - **LINE contact button**: opens `https://{LINE_HANDLE}` in a new tab. Same gesture-synchronous open.
+- Static LINE QR image at `public/line-qr.jpg` rendered inline (no modal). The image is checked in next to the env var that drives it - if a redeploy changes `LINE_HANDLE`, regenerate the image to match.
+- The contact section is always visible (independent of cart contents) so a visitor can reach the seller even with an empty / all-sold cart.
 
 ## Configuration
 
@@ -328,7 +331,12 @@ Client-side, no DB involvement.
     "DEFAULT_CURRENCY": "JPY",
     "SUPPORTED_CURRENCIES": "JPY,IDR,USD",
     "DEFAULT_LANGUAGE": "en",
-    "FB_HANDLE": "your-facebook-handle",
+    // Display URLs minus protocol (e.g. "m.me/akhdanfadh", "line.me/ti/p/...").
+    // The cart drawer renders these verbatim and prepends https:// when
+    // opening the new tab. LINE_HANDLE pairs with the static QR image at
+    // public/line-qr.jpg - regenerate that image if the handle changes.
+    "FB_HANDLE": "m.me/your-handle",
+    "LINE_HANDLE": "line.me/ti/p/your-line-id",
   },
 }
 ```

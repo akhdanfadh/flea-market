@@ -9,6 +9,13 @@
   "vars": {
     "DEFAULT_LANGUAGE": "en",
     "DEFAULT_CURRENCY": "JPY",
+    // Display URLs minus protocol. The cart drawer shows these verbatim on
+    // the contact buttons and prepends https:// when opening the link.
+    // NOTE: LINE_HANDLE pairs with the static QR image at public/line-qr.jpg.
+    // If a redeploy changes LINE_HANDLE (e.g. a Jakarta instance with a
+    // different LINE account), regenerate that image to match.
+    "FB_HANDLE": "m.me/akhdanfadh",
+    "LINE_HANDLE": "line.me/ti/p/iPItpl60Ll",
   },
   // Match the implicit defaults when `routes` is set, but state them
   // explicitly so `wrangler deploy` doesn't emit a warning on every run.

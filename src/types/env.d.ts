@@ -10,5 +10,7 @@ declare namespace Cloudflare {
     BUCKET: R2Bucket;
     DEFAULT_LANGUAGE: string;
     DEFAULT_CURRENCY: string;
+    FB_HANDLE: string;
+    LINE_HANDLE: string;
   }
 }

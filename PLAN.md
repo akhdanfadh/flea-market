@@ -641,30 +641,63 @@ Pitfalls:
 
 ## Step 9: Cart and contact flow
 
+**Status**: Done (2026-05-15). Shipped with the layout/UX deviations from the
+original task list documented inline in `ARCHITECTURE.md` #"Cart and contact
+flow"; the canonical reference for behavior is that section, not this list.
+
 **Goal**: Visitors can select items and generate a contact message.
 
 Tasks:
 
 - Add Zustand store at `src/stores/cart.ts`:
-  - `slugs: Set<string>`
-  - `add`, `remove`, `clear`, `has`
-  - localStorage persistence via Zustand's `persist` middleware, key `flea-market:cart`
-- Add "Add to cart" toggle button on list cards and detail pages
-- Add a floating cart badge (corner of viewport, mobile-friendly position) showing count
+  - `slugs: Set<string>` in memory; persisted as `string[]` via `partialize` +
+    `merge` (no `superjson` dep)
+  - Methods: `add`, `remove`, `removeMany` (used by the cart drawer's
+    "Remove unavailable items" cleanup). Membership lookup uses
+    `useCart(s => s.slugs.has(slug))` directly via the Set, so a dedicated
+    `has` method on the store would be dead surface; same logic dropped
+    `clear` (`removeMany(allSlugs)` covers the rare bulk case).
+  - localStorage persistence via Zustand's `persist` middleware, key
+    `flea-market:cart`
+  - Hard cap `CART_LIMIT = 50` extracted to `src/lib/cart-constants.ts`
+    (kept zustand-free so the server fn can share the literal without
+    pulling persist's localStorage rehydrate into a server module)
+- Add "Add to cart" toggle button on list cards and detail pages. Hidden on
+  `sold` and `draft`. Card-variant lives in a sibling `<button>` to the photo
+  Link (Link rendered as `absolute inset-0 z-10` overlay) - nesting `<button>`
+  inside `<a>` is invalid HTML and breaks assistive tech.
+- Add a fixed bottom-right pill (icon + "Cart" label + count badge) as the
+  Sheet trigger. Hidden until `useHasMounted` flips true (so SSR + persist
+  don't disagree on the count) and hidden on `/admin/*` paths.
 - Cart Sheet (shadcn Sheet component):
-  - Lists items by slug, fetches their current data from a server fn (so stale-cart-on-sold-item works correctly)
+  - Lists items by slug, fetches their current data from a server fn only on
+    Sheet open or explicit retry (NOT on every mutation, so a remove can't
+    fire a spurious refresh-failure banner)
   - Per-currency subtotals
-  - "Free" items grouped separately or marked inline
-  - Sold/reserved items shown with badge, excluded from message, with a banner if any are present
+  - "Free" items marked inline with a green chip
+  - Reserved items stay in the message body with an inline `[Reserved]`
+    tag (visitor signals "I know it's taken; flag me if it falls through")
+  - Sold items render dimmed in the list and are excluded from the message
+    and from totals. The same banner covers missing-from-server rows
+    (draft / deleted / renamed) with a unified "Remove unavailable items"
+    cleanup.
   - Generated message in a read-only textarea
-  - Buttons:
-    - **Open in Facebook** - copies message + opens `https://m.me/{FB_HANDLE}` in new tab
-    - **Show LINE QR** - opens modal with QR image
-    - **Copy message** - clipboard + toast
+  - Action buttons:
+    - **Copy message** - standalone, clipboard + Sonner toast
+    - **Messenger contact** - opens `https://{FB_HANDLE}` in a new tab
+      (synchronous `window.open` in the click handler so iOS Safari's
+      popup gate accepts it)
+    - **LINE contact** - opens `https://{LINE_HANDLE}` in a new tab
+  - Static LINE QR image inline (`public/line-qr.jpg`), no modal
 - Message templates in `src/lib/messages.ts`:
-  - `enMessage(items)` and `idMessage(items)`
-  - Choose based on current page language
-- Add `FB_HANDLE` to `wrangler.jsonc` vars
+  - `enMessage(items, origin)` and `idMessage(items, origin)`
+  - Choose based on current page language (read from root loader; origin
+    threaded through the loader from `getRequestUrl()` so multi-instance
+    redeploys emit the correct host)
+  - English intro + availability question conjugate by item count
+    (singular vs plural); Indonesian uses reduplication for plural
+- Add `FB_HANDLE` and `LINE_HANDLE` to `wrangler.jsonc` vars (display URL
+  minus protocol). Mirror in `src/types/env.d.ts`.
 
 Verify:
 
@@ -673,13 +706,15 @@ Verify:
 - Cart survives navigation
 - Generated message is correct in both languages
 - Copy-to-clipboard works (test on actual mobile browser, not just desktop)
-- LINE QR modal shows the QR image
-- Sold items added to the cart in a previous session show the banner and don't bleed into the message
+- LINE QR image visible inline at the bottom of the drawer
+- Sold items added to the cart in a previous session show the unavailable
+  banner and don't bleed into the message
 
 Pitfalls:
 
-- Zustand persistence needs JSON-serializable state. A `Set` is not directly serializable; either use an array internally or supply a custom `storage` adapter (the older `serialize`/`deserialize` options are deprecated). `superjson` plugged into `storage` is one drop-in approach
+- Zustand persistence needs JSON-serializable state. A `Set` is not directly serializable; either use an array internally or supply a custom `storage` adapter (the older `serialize`/`deserialize` options are deprecated). The implementation lands on `partialize` (Set -> array on write) + `merge` (array -> Set on rehydrate) so the in-memory shape stays a `Set` without superjson.
 - `navigator.clipboard.writeText` fails silently on non-HTTPS; verify on the actual deployed `akhdan.dev`, not just `localhost`
+- Sonner deduplicates by `toasterId`. Mounting a second `<Toaster>` without setting `id` makes every `toast.success()` render in both - keep the global Toaster in `__root.tsx` only.
 
 ## Done
 

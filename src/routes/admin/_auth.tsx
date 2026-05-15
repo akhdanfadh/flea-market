@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 
-import { Toaster } from "@/components/ui/sonner";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 
 // POST so the response is uncached by default; a GET RPC for an auth check
@@ -23,12 +22,15 @@ export const Route = createFileRoute("/admin/_auth")({
 // No admin-specific header chrome - the global SiteHeader stays, and the
 // SiteFooter's shield icon flips to a logout button when the visible
 // pathname is under /admin/ (excluding /admin/login/), so logout lives
-// in one consistent corner of every authed admin page.
+// in one consistent corner of every authed admin page. The global
+// <Toaster /> mounted in __root.tsx handles both admin and visitor
+// toasts; mounting a second one here would cause every toast to render
+// twice (sonner only de-duplicates by toasterId, which neither would
+// set).
 function AdminLayout() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6">
       <Outlet />
-      <Toaster position="top-center" />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { CarouselApi } from "@/components/ui/carousel";
 import type { Currency, ItemPhoto, ItemStatus } from "@/db/schema.ts";
 
+import { CartToggleButton } from "@/components/cart-toggle-button.tsx";
 import { PricePill } from "@/components/price-pill.tsx";
 import {
   Carousel,
@@ -156,6 +157,11 @@ export function DetailContent({
         )}
       >
         <h1 className="text-2xl font-semibold sm:text-3xl">{translation.title}</h1>
+        {/* Sits between title and description so the primary call-to-action
+            lands right after the visitor reads what the item is. On lg: the
+            description below still scrolls (lg:flex-1 lg:overflow-y-auto)
+            while the title and button stay pinned at the top. */}
+        <CartToggleButton slug={item.slug} status={item.status} variant="detail" />
         {translation.description ? (
           // min-h-0 is required for flex-1 + overflow-y-auto to actually clip;
           // without it the flex item refuses to shrink below its content height

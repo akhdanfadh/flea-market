@@ -2,14 +2,29 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestUrl } from "@tanstack/react-start/server";
+import { env } from "cloudflare:workers";
 
+import { CartFab } from "@/components/cart-fab.tsx";
 import { SiteFooter } from "@/components/site-footer.tsx";
 import { SiteHeader } from "@/components/site-header.tsx";
+import { Toaster } from "@/components/ui/sonner.tsx";
 import { getLanguage } from "@/lib/lang.server.ts";
 import appCss from "@/styles.css?url";
 
 const loadRootContext = createServerFn({ method: "GET" }).handler(() => ({
   language: getLanguage(),
+  // Public vars exposing the seller's contact-link surfaces. Stored as the
+  // display URL minus protocol (e.g. "m.me/akhdanfadh", "line.me/ti/p/...").
+  // The cart drawer shows these verbatim as button labels and prepends
+  // https:// when opening the new tab.
+  fbHandle: env.FB_HANDLE,
+  lineHandle: env.LINE_HANDLE,
+  // Request-derived origin (e.g. "https://flea-market.akhdan.dev") feeds the
+  // cart drawer's message-body URLs. Derived here instead of hardcoded so a
+  // multi-instance redeploy (Jakarta etc.) emits the correct host without
+  // a code change.
+  origin: getRequestUrl().origin,
 }));
 
 export const Route = createRootRoute({
@@ -67,6 +82,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <SiteHeader language={language} />
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        {loaderData ? <CartFab /> : null}
+        {/* Single global Toaster covering admin actions and visitor cart
+            feedback. Don't add a second one inside /admin/_auth.tsx:
+            sonner only deduplicates by `toasterId`, which neither would
+            set, so every toast.success() would render twice. */}
+        <Toaster position="top-center" />
         <TanStackDevtools
           config={{
             position: "bottom-right",
