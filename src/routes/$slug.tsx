@@ -1,6 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
+import { getCookie, getRequestUrl } from "@tanstack/react-start/server";
 import { env } from "cloudflare:workers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { ChevronLeftIcon, PencilIcon } from "lucide-react";
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getDb } from "@/db/client.ts";
 import { itemTranslations, items } from "@/db/schema.ts";
 import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
+import { optimizedImageUrl } from "@/lib/images.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
 import { cn } from "@/lib/utils.ts";
@@ -33,6 +34,12 @@ type DetailPayload = {
   // Back link. Authoritative check via the signed admin cookie - cheaper
   // than a second server-fn round-trip and avoids a hydration flash.
   isAdmin: boolean;
+  // Request-derived origin (e.g. "https://flea-market.akhdan.dev") used to
+  // construct absolute URLs for Open Graph + Twitter Card meta. Crawlers
+  // (LINE, Twitter, Facebook) fetch og:image from off-origin, so the URL
+  // must be fully qualified. Derived here rather than hardcoded so a
+  // domain change emits the correct host without a code edit.
+  origin: string;
 };
 
 const loadDetail = createServerFn({ method: "GET" })
@@ -74,16 +81,52 @@ const loadDetail = createServerFn({ method: "GET" })
         ? { title: t.title, description: t.description }
         : { title: item.slug, description: "" },
       isAdmin,
+      origin: getRequestUrl().origin,
     };
   });
+
+// Social-preview description cap. LINE/Twitter/Facebook generally show
+// the first ~200 chars before truncation; clipping here keeps the meta
+// tags clean and avoids dumping multi-paragraph descriptions into the
+// HTML head. Whitespace is collapsed to a single line first because
+// `whitespace-pre-wrap` newlines that look fine in the description block
+// become awkward gaps in the preview card.
+function truncateForPreview(text: string, max = 200): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= max) return collapsed;
+  return collapsed.slice(0, max - 1).trimEnd() + "…";
+}
 
 export const Route = createFileRoute("/$slug")({
   loader: ({ params }) => loadDetail({ data: params.slug }),
   validateSearch: searchSchema,
-  head: ({ loaderData }) =>
-    loaderData
-      ? { meta: [{ title: `${loaderData.translation.title} | Akhdan's Flea Market` }] }
-      : {},
+  head: ({ loaderData }) => {
+    if (!loaderData) return {};
+    const { item, translation, origin } = loaderData;
+    const pageTitle = `${translation.title} | Akhdan's Flea Market`;
+    const description = truncateForPreview(translation.description);
+    const url = `${origin}/${item.slug}/`;
+    // 1200px is the standard OG image width; Cloudflare's transformer
+    // resizes from the original square photo. Falls back to no og:image
+    // (default twitter:card "summary" instead of "summary_large_image")
+    // when the item has no photos, which keeps the card minimal rather
+    // than scraping the page for a random img.
+    const photoKey = item.photos[0]?.key;
+    const image = photoKey ? `${origin}${optimizedImageUrl(photoKey, { width: 1200 })}` : null;
+    return {
+      meta: [
+        { title: pageTitle },
+        { name: "description", content: description },
+        { property: "og:title", content: pageTitle },
+        { property: "og:description", content: description },
+        { property: "og:url", content: url },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: "Akhdan's Flea Market" },
+        ...(image ? [{ property: "og:image", content: image }] : []),
+        { name: "twitter:card", content: image ? "summary_large_image" : "summary" },
+      ],
+    };
+  },
   component: Detail,
   pendingComponent: DetailSkeleton,
   // pendingMs: don't flash a skeleton on fast loader resolves; only show after 200ms.
