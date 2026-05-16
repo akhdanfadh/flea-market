@@ -397,11 +397,20 @@ function ListCard({
   const mounted = useHasMounted();
   const inCart = useCart((s) => s.slugs.has(item.slug));
   const selected = mounted && inCart;
+  const sold = item.status === "sold";
+  const reserved = item.status === "reserved";
   return (
     <Card
       className={cn(
         "relative overflow-hidden pt-0 pb-4 transition hover:shadow-md",
         selected && "border-transparent ring-4 ring-primary",
+        // Unavailable cards recede so available items dominate the grid.
+        // Reserved sits at 80% (soft signal - it might still come back),
+        // sold drops to 40% and grayscales the photo (hard signal - done).
+        // Opacity cascades to the banner too; the colored sash stays the
+        // primary indicator and remains legible at both levels.
+        reserved && "opacity-80",
+        sold && "opacity-40",
       )}
     >
       {/* Inner ring drawn on a separate overlay (not via inset-ring on the
@@ -436,7 +445,7 @@ function ListCard({
           <img
             src={optimizedImageUrl(item.photos[0]!.key, { width: 400 })}
             alt={item.photos[0]!.alt ?? translation.title}
-            className="aspect-square w-full object-cover"
+            className={cn("aspect-square w-full object-cover", sold && "grayscale")}
             loading="lazy"
           />
         ) : (
