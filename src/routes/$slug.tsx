@@ -1,7 +1,9 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
+import { env } from "cloudflare:workers";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, PencilIcon } from "lucide-react";
 import { z } from "zod";
 
 import type { DetailItem } from "@/components/detail-content.tsx";
@@ -10,6 +12,7 @@ import { DetailContent } from "@/components/detail-content.tsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDb } from "@/db/client.ts";
 import { itemTranslations, items } from "@/db/schema.ts";
+import { ADMIN_SESSION_COOKIE, isAdminSession } from "@/lib/auth.server.ts";
 import { getLanguage } from "@/lib/lang.server.ts";
 import { serializeItem } from "@/lib/serialize-item.ts";
 import { cn } from "@/lib/utils.ts";
@@ -26,6 +29,10 @@ const searchSchema = z.object({
 type DetailPayload = {
   item: DetailItem;
   translation: { title: string; description: string };
+  // Signals to the page that an Edit shortcut should render next to the
+  // Back link. Authoritative check via the signed admin cookie - cheaper
+  // than a second server-fn round-trip and avoids a hydration flash.
+  isAdmin: boolean;
 };
 
 const loadDetail = createServerFn({ method: "GET" })
@@ -59,11 +66,14 @@ const loadDetail = createServerFn({ method: "GET" })
     const en = trs.find((t) => t.language === "en");
     const t = pref ?? en;
 
+    const isAdmin = await isAdminSession(getCookie(ADMIN_SESSION_COOKIE), env.COOKIE_SECRET);
+
     return {
       item: serializeItem(item),
       translation: t
         ? { title: t.title, description: t.description }
         : { title: item.slug, description: "" },
+      isAdmin,
     };
   });
 
@@ -93,11 +103,11 @@ export const Route = createFileRoute("/$slug")({
 const PAGE_FRAME_LG =
   "lg:grid lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-4 lg:h-[calc(100dvh-7rem)] lg:overflow-hidden";
 
-const BACK_LINK_CLASS =
-  "mb-4 inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:mb-0";
+const NAV_LINK_CLASS =
+  "inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground";
 
 function Detail() {
-  const { item, translation } = Route.useLoaderData();
+  const { item, translation, isAdmin } = Route.useLoaderData();
   const { from } = Route.useSearch();
   // Pathname-typed Link: TanStack Router's typed routes don't accept a union
   // for `to`, so render the right Link branch instead of computing the target.
@@ -105,17 +115,25 @@ function Detail() {
     <div
       className={cn("mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8", PAGE_FRAME_LG)}
     >
-      {from === "admin" ? (
-        <Link to="/admin/" className={BACK_LINK_CLASS}>
-          <ChevronLeftIcon className="size-4" />
-          Back to items
-        </Link>
-      ) : (
-        <Link to="/" className={BACK_LINK_CLASS}>
-          <ChevronLeftIcon className="size-4" />
-          Back to catalog
-        </Link>
-      )}
+      <div className="mb-4 flex items-center justify-between gap-4 lg:mb-0">
+        {from === "admin" ? (
+          <Link to="/admin/" className={NAV_LINK_CLASS}>
+            <ChevronLeftIcon className="size-4" />
+            Back to items
+          </Link>
+        ) : (
+          <Link to="/" className={NAV_LINK_CLASS}>
+            <ChevronLeftIcon className="size-4" />
+            Back to catalog
+          </Link>
+        )}
+        {isAdmin && (
+          <Link to="/admin/$slug/edit/" params={{ slug: item.slug }} className={NAV_LINK_CLASS}>
+            <PencilIcon className="size-4" />
+            Edit
+          </Link>
+        )}
+      </div>
       <DetailContent item={item} translation={translation} variant="page" />
     </div>
   );
@@ -129,7 +147,9 @@ function DetailSkeleton() {
     <div
       className={cn("mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8", PAGE_FRAME_LG)}
     >
-      <Skeleton className="mb-4 h-5 w-32 lg:mb-0" />
+      <div className="mb-4 lg:mb-0">
+        <Skeleton className="h-5 w-32" />
+      </div>
       <div className="lg:grid lg:h-full lg:grid-cols-2 lg:gap-8">
         <Skeleton className="mx-auto aspect-square w-full rounded-lg sm:max-w-md lg:mx-0 lg:max-w-none lg:self-center" />
 
