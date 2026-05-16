@@ -69,17 +69,22 @@ export function PhotoDropzone({
       // new one. Acceptable at single-admin scale; a JSON1 json_set / etc.
       // mutation would be the upgrade if multi-tab editing becomes real.
       //
-      // For multi-file drops, surface a single counter toast that updates
-      // each iteration - on slow networks a drop of 5 photos would
-      // otherwise look frozen for tens of seconds. Per-file failures still
-      // get their own error toast.
+      // Always surface a single progress toast that flips to success on
+      // completion. For multi-file drops it doubles as a counter so a slow
+      // network drop of 5 photos doesn't look frozen for tens of seconds.
+      // Per-file failures still get their own error toast.
       const total = acceptedFiles.length;
-      const progressId = total > 1 ? toast.loading(`Uploading 1 of ${total}...`) : undefined;
+      // All files rejected by react-dropzone (oversized, wrong type) -
+      // rejection toasts already fired above; nothing to upload.
+      if (total === 0) return;
+      const progressId = toast.loading(
+        total > 1 ? `Uploading 1 of ${total}...` : "Uploading photo...",
+      );
       let uploaded = 0;
       let latestPhotos: ItemPhoto[] | null = null;
       for (let i = 0; i < total; i++) {
         const file = acceptedFiles[i];
-        if (progressId !== undefined) {
+        if (total > 1) {
           toast.loading(`Uploading ${i + 1} of ${total}...`, { id: progressId });
         }
         const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -107,14 +112,12 @@ export function PhotoDropzone({
           toast.error(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      if (progressId !== undefined) {
-        if (uploaded > 0) {
-          toast.success(`Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"}`, {
-            id: progressId,
-          });
-        } else {
-          toast.dismiss(progressId);
-        }
+      if (uploaded > 0) {
+        toast.success(`Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"}`, {
+          id: progressId,
+        });
+      } else {
+        toast.dismiss(progressId);
       }
       if (latestPhotos) onUploaded(latestPhotos);
     },
