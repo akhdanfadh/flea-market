@@ -302,6 +302,23 @@ function EditItemPage() {
   // until invalidate refreshes loader data, or reverts on error.
   const [optimisticPhotos, setOptimisticPhotos] = useState<ItemPhoto[] | null>(null);
 
+  // Mirror of the removal flicker fix below: clearing optimisticPhotos
+  // synchronously after `await router.invalidate()` races with loaderData
+  // propagation - the setState renders first with the pre-mutation
+  // loaderData, briefly showing the old photo order (on reorder) or the
+  // upload snapshot without the just-added photo (on upload). Clearing
+  // here once loaderData.photos actually changes lands the clear in the
+  // same render as the new loaderData, eliminating that backslide.
+  useEffect(() => {
+    // No-op when optimisticPhotos is already null (React bails out on
+    // same-value setState). Depending on optimisticPhotos here would
+    // collapse the snapshot the moment a mutation sets it, before the
+    // server even sees the action - that's exactly the staleness this
+    // effect exists to avoid. Reacting to loaderData.photos only is
+    // intentional.
+    setOptimisticPhotos(null);
+  }, [loaderData.photos]);
+
   // Photo removal uses a deferred-commit "Undo" pattern: each click queues
   // the key into pendingRemovals and (re)starts a single 5s commit timer.
   // The rolling toast (same Sonner id each click) reflects the current
@@ -329,6 +346,29 @@ function EditItemPage() {
     pendingRemovalsRef.current = pendingRemovals;
   }, [pendingRemovals]);
   const commitTimerRef = useRef<number | null>(null);
+
+  // After commitPendingRemovals runs server fns + invalidate, TanStack Router's
+  // store update and a synchronous setPendingRemovals don't batch into one
+  // render: the setState renders first with stale loaderData, briefly
+  // resurrecting the just-removed photo before loaderData catches up. Instead
+  // of clearing in commit, drop keys here once loaderData reflects the
+  // removal - that render is already correct (the photo is absent from
+  // loaderData), so dropping the now-redundant filter key changes nothing
+  // visible. Failed keys stay in loaderData and are cleared explicitly
+  // inside commitPendingRemovals so they reappear matching server state.
+  useEffect(() => {
+    if (pendingRemovals.size === 0) return;
+    const loaderKeys = new Set(loaderData.photos.map((p) => p.key));
+    const next = new Set(pendingRemovals);
+    let dirty = false;
+    for (const key of pendingRemovals) {
+      if (!loaderKeys.has(key)) {
+        next.delete(key);
+        dirty = true;
+      }
+    }
+    if (dirty) setPendingRemovals(next);
+  }, [loaderData.photos, pendingRemovals]);
 
   // Two layers compose the visible grid: `optimisticPhotos` covers upload
   // and reorder intent until invalidate refreshes loader data, and the
@@ -523,7 +563,9 @@ function EditItemPage() {
   }
 
   // Photo mutations all share this shape: optimistic update -> server fn ->
-  // invalidate -> clear optimistic. Revert on error.
+  // invalidate. The loaderData-sync effect above clears optimisticPhotos
+  // once the refresh lands, so success doesn't need an inline clear. Error
+  // reverts synchronously since loaderData hasn't changed.
   async function withOptimisticPhotos(
     next: ItemPhoto[],
     action: () => Promise<void>,
@@ -533,7 +575,6 @@ function EditItemPage() {
     try {
       await action();
       await router.invalidate();
-      setOptimisticPhotos(null);
     } catch (err) {
       setOptimisticPhotos(null);
       toast.error(errorTitle, {
@@ -549,7 +590,6 @@ function EditItemPage() {
     setOptimisticPhotos(next);
     try {
       await router.invalidate();
-      setOptimisticPhotos(null);
     } catch {
       // The photos are on the server; only the page refresh failed. Keep
       // the optimistic snapshot in place so the just-uploaded thumbnails
@@ -628,16 +668,20 @@ function EditItemPage() {
       // Swallow: any successful removals are now on the server; the toast
       // below covers user feedback even if the page state lags.
     }
-    // Clear ALL keys from pendingRemovals - succeeded ones are gone from
-    // the server (and now from loaderData via invalidate), failed/unattempted
-    // ones are still on the server and should reappear in the grid so the
-    // UI matches reality. Hiding failed photos in pendingRemovals would lie
-    // visually and the lie would compound on reload.
-    setPendingRemovals((prev) => {
-      const next = new Set(prev);
-      for (const key of keys) next.delete(key);
-      return next;
-    });
+    // Only clear FAILED keys here. Succeeded ones are dropped by the
+    // loaderData-sync effect once React commits the post-invalidate render -
+    // clearing them inline causes a flicker (stale-loaderData render
+    // resurrects the photo for one frame). Failures stay in loaderData,
+    // so the effect won't drop them and they'd stay hidden indefinitely
+    // without this explicit clear.
+    if (failures.length > 0) {
+      const failedKeys = new Set(failures.map((f) => f.key));
+      setPendingRemovals((prev) => {
+        const next = new Set(prev);
+        for (const key of failedKeys) next.delete(key);
+        return next;
+      });
+    }
     if (failures.length === 0) {
       toast.success(`${succeeded} photo${succeeded === 1 ? "" : "s"} removed`, {
         id: REMOVAL_TOAST_ID,
