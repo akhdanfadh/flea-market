@@ -42,6 +42,14 @@ import { useCart } from "@/stores/cart.ts";
 const PRICE_FILTERS = ["free", "paid"] as const;
 type PriceValue = (typeof PRICE_FILTERS)[number];
 
+// Escape regex metachars so user input drops into RegExp() unchanged.
+// Covers the standard set; flea-market queries are typed by a human so
+// exotic Unicode regex syntax isn't a concern here.
+const REGEX_META = /[.*+?^${}()|[\]\\]/g;
+function escapeRegex(s: string): string {
+  return s.replace(REGEX_META, "\\$&");
+}
+
 const searchSchema = z.object({
   // PUBLIC_STATUSES, not ITEM_STATUSES - `draft` is admin-only and must not
   // be acceptable as a public URL filter value. SQL loader filters drafts
@@ -244,15 +252,36 @@ function Home() {
   // (including in-progress trailing spaces), but pure-whitespace queries don't
   // exclude everything via `.includes("   ")`.
   const q = qInput.trim().toLowerCase();
+  // Word-start match for ASCII queries so "rice" doesn't surface items
+  // whose description mentions "price" - the visitor didn't search for
+  // a substring. CJK queries fall through to substring matching since
+  // Japanese has no whitespace word boundaries and \b would never fire
+  // between characters; "仙台" still needs to find "仙台駅" in the wild.
+  const queryRe = q && /^[a-z0-9]/.test(q) ? new RegExp(`\\b${escapeRegex(q)}`) : null;
+  const matchesQuery = (text: string) => (queryRe ? queryRe.test(text) : !q || text.includes(q));
+
   const filtered = rows.filter(({ item, translation }) => {
     if (search.status !== undefined && item.status !== search.status) return false;
     if (search.price === "free" && item.priceAmount !== null) return false;
     if (search.price === "paid" && item.priceAmount === null) return false;
-    if (q && !`${translation.title} ${translation.description}`.toLowerCase().includes(q)) {
+    if (q && !matchesQuery(`${translation.title} ${translation.description}`.toLowerCase())) {
       return false;
     }
     return true;
   });
+  // Bias the search results so title matches float above description-only
+  // matches. Title is the "obvious" thing the visitor was looking for;
+  // description hits stay surfaced (so "Sendai" or "PSE-certified" still
+  // find the rice cooker) but rank below. Stable sort preserves the
+  // status/createdAt order within each rank group. Skipped when q is
+  // empty so the DB-driven order survives unfiltered browsing.
+  if (q) {
+    filtered.sort((a, b) => {
+      const aRank = matchesQuery(a.translation.title.toLowerCase()) ? 0 : 1;
+      const bRank = matchesQuery(b.translation.title.toLowerCase()) ? 0 : 1;
+      return aRank - bRank;
+    });
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 md:pb-8">
