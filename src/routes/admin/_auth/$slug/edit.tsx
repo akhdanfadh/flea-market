@@ -804,102 +804,6 @@ function EditItemPage() {
       <form id="edit-item-form" onSubmit={form.handleSubmit(onFormSubmit)}>
         <FieldGroup>
           <FieldSet>
-            <FieldLegend>English</FieldLegend>
-            <FieldGroup>
-              <Controller
-                control={form.control}
-                name="translations.en.title"
-                render={({ field, fieldState }) => (
-                  <Field
-                    data-invalid={fieldState.invalid || undefined}
-                    data-dirty={fieldState.isDirty || undefined}
-                    className={DIRTY_RAIL}
-                  >
-                    <FieldLabel htmlFor="en-title">Title</FieldLabel>
-                    <Input id="en-title" {...field} aria-invalid={fieldState.invalid} />
-                    <FieldError errors={[fieldState.error]} />
-                  </Field>
-                )}
-              />
-              <Controller
-                control={form.control}
-                name="translations.en.description"
-                render={({ field, fieldState }) => (
-                  <Field
-                    data-invalid={fieldState.invalid || undefined}
-                    data-dirty={fieldState.isDirty || undefined}
-                    className={DIRTY_RAIL}
-                  >
-                    <FieldLabel htmlFor="en-desc">Description</FieldLabel>
-                    <Textarea id="en-desc" {...field} rows={4} aria-invalid={fieldState.invalid} />
-                    <FieldError errors={[fieldState.error]} />
-                  </Field>
-                )}
-              />
-            </FieldGroup>
-          </FieldSet>
-
-          <Field
-            orientation="horizontal"
-            data-dirty={idToggleDirty || undefined}
-            className={DIRTY_RAIL}
-          >
-            <Checkbox id="add-id-translation" checked={idEnabled} onCheckedChange={toggleId} />
-            <FieldLabel htmlFor="add-id-translation">Add Indonesian translation</FieldLabel>
-          </Field>
-
-          {idEnabled && (
-            <FieldSet>
-              <FieldLegend>Indonesian</FieldLegend>
-              <FieldGroup>
-                <Controller
-                  control={form.control}
-                  name="translations.id.title"
-                  render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid || undefined}
-                      data-dirty={fieldState.isDirty || undefined}
-                      className={DIRTY_RAIL}
-                    >
-                      <FieldLabel htmlFor="id-title">Title</FieldLabel>
-                      <Input
-                        id="id-title"
-                        {...field}
-                        value={field.value ?? ""}
-                        aria-invalid={fieldState.invalid}
-                      />
-                      <FieldError errors={[fieldState.error]} />
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={form.control}
-                  name="translations.id.description"
-                  render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid || undefined}
-                      data-dirty={fieldState.isDirty || undefined}
-                      className={DIRTY_RAIL}
-                    >
-                      <FieldLabel htmlFor="id-desc">Description</FieldLabel>
-                      <Textarea
-                        id="id-desc"
-                        {...field}
-                        value={field.value ?? ""}
-                        rows={4}
-                        aria-invalid={fieldState.invalid}
-                      />
-                      <FieldError errors={[fieldState.error]} />
-                    </Field>
-                  )}
-                />
-              </FieldGroup>
-            </FieldSet>
-          )}
-
-          <Separator />
-
-          <FieldSet>
             <FieldLegend>Price</FieldLegend>
             <FieldGroup>
               <Field
@@ -1019,6 +923,102 @@ function EditItemPage() {
               )}
             </FieldGroup>
           </FieldSet>
+
+          <Separator />
+
+          <FieldSet>
+            <FieldLegend>English</FieldLegend>
+            <FieldGroup>
+              <Controller
+                control={form.control}
+                name="translations.en.title"
+                render={({ field, fieldState }) => (
+                  <Field
+                    data-invalid={fieldState.invalid || undefined}
+                    data-dirty={fieldState.isDirty || undefined}
+                    className={DIRTY_RAIL}
+                  >
+                    <FieldLabel htmlFor="en-title">Title</FieldLabel>
+                    <Input id="en-title" {...field} aria-invalid={fieldState.invalid} />
+                    <FieldError errors={[fieldState.error]} />
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="translations.en.description"
+                render={({ field, fieldState }) => (
+                  <Field
+                    data-invalid={fieldState.invalid || undefined}
+                    data-dirty={fieldState.isDirty || undefined}
+                    className={DIRTY_RAIL}
+                  >
+                    <FieldLabel htmlFor="en-desc">Description</FieldLabel>
+                    <Textarea id="en-desc" {...field} rows={4} aria-invalid={fieldState.invalid} />
+                    <FieldError errors={[fieldState.error]} />
+                  </Field>
+                )}
+              />
+            </FieldGroup>
+          </FieldSet>
+
+          <Field
+            orientation="horizontal"
+            data-dirty={idToggleDirty || undefined}
+            className={DIRTY_RAIL}
+          >
+            <Checkbox id="add-id-translation" checked={idEnabled} onCheckedChange={toggleId} />
+            <FieldLabel htmlFor="add-id-translation">Add Indonesian translation</FieldLabel>
+          </Field>
+
+          {idEnabled && (
+            <FieldSet>
+              <FieldLegend>Indonesian</FieldLegend>
+              <FieldGroup>
+                <Controller
+                  control={form.control}
+                  name="translations.id.title"
+                  render={({ field, fieldState }) => (
+                    <Field
+                      data-invalid={fieldState.invalid || undefined}
+                      data-dirty={fieldState.isDirty || undefined}
+                      className={DIRTY_RAIL}
+                    >
+                      <FieldLabel htmlFor="id-title">Title</FieldLabel>
+                      <Input
+                        id="id-title"
+                        {...field}
+                        value={field.value ?? ""}
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
+                <Controller
+                  control={form.control}
+                  name="translations.id.description"
+                  render={({ field, fieldState }) => (
+                    <Field
+                      data-invalid={fieldState.invalid || undefined}
+                      data-dirty={fieldState.isDirty || undefined}
+                      className={DIRTY_RAIL}
+                    >
+                      <FieldLabel htmlFor="id-desc">Description</FieldLabel>
+                      <Textarea
+                        id="id-desc"
+                        {...field}
+                        value={field.value ?? ""}
+                        rows={4}
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
+              </FieldGroup>
+            </FieldSet>
+          )}
 
           <Separator />
 
