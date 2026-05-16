@@ -13,6 +13,7 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { optimizedImageUrl } from "@/lib/images.ts";
+import { linkifyText } from "@/lib/linkify.tsx";
 import { STATUS_LABEL } from "@/lib/statuses.ts";
 import { cn } from "@/lib/utils.ts";
 
@@ -167,7 +168,7 @@ export function DetailContent({
           // without it the flex item refuses to shrink below its content height
           // and overflow never kicks in.
           <p className="whitespace-pre-wrap text-base leading-relaxed text-muted-foreground lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
-            {translation.description}
+            {linkifyText(translation.description)}
           </p>
         ) : null}
       </div>
