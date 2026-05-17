@@ -328,7 +328,7 @@ Client-side, no DB involvement.
 - Read-only textarea showing the generated message in the current page language (EN or ID template). Item titles localize via the loader's resolved language; UI chrome (badges, banners, button labels) stays English-only.
 - Three actions stacked vertically next to a small LINE QR image (left-aligned heading "Scan QR or reach me via:"):
   - **Copy message**: synchronous `navigator.clipboard.writeText()`, surfaces a Sonner toast on success or failure. Standalone button so the visitor reviews the prefilled text first, then chooses a channel. `navigator.clipboard.writeText` fails silently on non-HTTPS - verify on the deployed origin, not `localhost`.
-  - **Messenger contact button**: opens `https://m.me/{FB_HANDLE}` in a new tab. Synchronous `window.open` inside the click handler so iOS Safari's user-gesture popup gate accepts the navigation.
+  - **Facebook contact button**: opens `https://{FB_HANDLE}` in a new tab. Synchronous `window.open` inside the click handler so iOS Safari's user-gesture popup gate accepts the navigation. Links to the Facebook profile rather than `m.me/` (Messenger) - the Messenger deep-link proved unreliable across visitors' phones in practice.
   - **LINE contact button**: opens `https://{LINE_HANDLE}` in a new tab. Same gesture-synchronous open.
 - Static LINE QR image served from R2 at `/images/static/line-qr.jpg`, rendered inline (no modal). The QR is deployer-supplied (upload via `wrangler r2 object put flea-market/static/line-qr.jpg ...`; see `OPERATIONS.md`); `r2:prune` is configured to skip the `static/` prefix so the object isn't treated as orphan. If `LINE_HANDLE` changes, regenerate and re-upload.
 - The contact section is always visible (independent of cart contents) so a visitor can reach the seller even with an empty / all-sold cart.
@@ -367,7 +367,7 @@ Client-side, no DB involvement.
 | `COOKIE_SECRET`      | `openssl rand -hex 32`                             |
 | `TURSO_DATABASE_URL` | Turso dashboard                                    |
 | `TURSO_AUTH_TOKEN`   | Turso dashboard                                    |
-| `FB_HANDLE`          | Display URL minus protocol (e.g. `m.me/handle`)    |
+| `FB_HANDLE`          | Display URL minus protocol (e.g. `fb.com/handle`)  |
 | `LINE_HANDLE`        | Display URL minus protocol (e.g. `line.me/ti/p/…`) |
 
 ### Local development (`.dev.vars`, gitignored)

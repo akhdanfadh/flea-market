@@ -1,4 +1,4 @@
-import { SiLine, SiMessenger } from "@icons-pack/react-simple-icons";
+import { SiFacebook, SiLine } from "@icons-pack/react-simple-icons";
 import { Link, getRouteApi, useLocation } from "@tanstack/react-router";
 import { AlertTriangleIcon, CopyIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -290,8 +290,8 @@ function CartSheetBody({
   // openContact normalises the handle defensively. The env contract is
   // "host/path, no protocol" (see wrangler.jsonc). Two failure modes worth
   // closing off:
-  // - "https://m.me/foo" (someone pastes the full URL) -> would produce
-  //   "https://https://m.me/foo" and silently break -> strip the prefix.
+  // - "https://fb.com/foo" (someone pastes the full URL) -> would produce
+  //   "https://https://fb.com/foo" and silently break -> strip the prefix.
   // - "//evil.com" or "/foo" (someone starts with a slash) -> would produce
   //   "https:////evil.com" which browsers normalise to host=evil.com ->
   //   require a host-then-path shape.
@@ -475,7 +475,7 @@ function CartSheetBody({
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <p className="text-sm font-medium">Scan QR or reach me via:</p>
           <Button type="button" size="lg" onClick={openFacebook} className="w-full">
-            <SiMessenger className="size-4" />
+            <SiFacebook className="size-4" />
             {/* min-w-0 lets the span shrink below its content so `truncate`
                 (which needs an overflow boundary to clip against) can clamp
                 the URL with an ellipsis instead of pushing the QR offscreen. */}

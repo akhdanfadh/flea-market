@@ -15,7 +15,7 @@ import appCss from "@/styles.css?url";
 const loadRootContext = createServerFn({ method: "GET" }).handler(() => ({
   language: getLanguage(),
   // Public vars exposing the seller's contact-link surfaces. Stored as the
-  // display URL minus protocol (e.g. "m.me/your-handle", "line.me/ti/p/...").
+  // display URL minus protocol (e.g. "fb.com/your-handle", "line.me/ti/p/...").
   // The cart drawer shows these verbatim as button labels and prepends
   // https:// when opening the new tab.
   fbHandle: env.FB_HANDLE,

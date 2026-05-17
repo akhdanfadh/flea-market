@@ -28,7 +28,7 @@ These steps create state in the Cloudflare account that `wrangler.jsonc` and `pn
    - `COOKIE_SECRET` - `openssl rand -hex 32`
    - `TURSO_DATABASE_URL` - from step 4
    - `TURSO_AUTH_TOKEN` - from step 4
-   - `FB_HANDLE` - your real Messenger handle (e.g. `m.me/your-handle`). Not declared in `wrangler.jsonc` `vars`; secrets are the sole source so the real value never lands in the repo.
+   - `FB_HANDLE` - your real Facebook profile handle (e.g. `fb.com/your-handle`). Not declared in `wrangler.jsonc` `vars`; secrets are the sole source so the real value never lands in the repo.
    - `LINE_HANDLE` - your real LINE handle (e.g. `line.me/ti/p/...`). Same pattern as `FB_HANDLE`.
 6. **LINE QR image**: the cart drawer renders a QR at `/images/static/line-qr.jpg`, served from R2. Upload yours to R2 once:
    ```sh
